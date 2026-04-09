@@ -1,0 +1,490 @@
+"""
+migrate_former_customers.py
+===========================
+ETL script: SiteLink "All Former Tenants" Excel export -> storentic.customer
+
+Source format (differs from active-tenant export used by migrate_customers.py):
+    LOCATIONCODE, SITENAME, UNITNAME, SALUTATION,
+    FIRSTNAME, MI, LASTNAME, NAME, COMPANY,
+    ADDRESS1, ADDRESS2, CITY, STATE, ZIPCODE,
+    EMAIL, PHONE, MOBILE, GATECODE,
+    BIRTHDATE, TAXID, DATEMOVEDIN, DATEMOVEDOUT, ACTIVELEDGERS
+
+Key behaviours
+--------------
+1. Rows where ACTIVELEDGERS > 0 are written to
+   output/active_ledgers_review.xlsx and excluded from import.
+2. Remaining rows are deduplicated by (LASTNAME, FIRSTNAME, PHONE/MOBILE/EMAIL)
+   keeping the row with the most recent DATEMOVEDOUT.
+3. external_id = "FT-{GATECODE}" — prefixed so it never collides with the
+   numeric TenantId values used by active customers (migrate_customers.py).
+   Falls back to "FT-{8-char hash}" when GATECODE is blank.
+4. Fully idempotent: re-runs skip already-imported FT-* external_ids.
+5. Same INSERT/UPDATE SQL and storentic.customer table as migrate_customers.py.
+
+Usage
+-----
+    # Dry run — shows counts, no DB writes
+    python migrate_former_customers.py --file "data/FormerTenants.xlsx" --dry-run
+
+    # Live import
+    python migrate_former_customers.py --file "data/FormerTenants.xlsx"
+
+    # Export to Excel for QA review before importing
+    python migrate_former_customers.py --file "data/FormerTenants.xlsx" --output excel
+
+Environment (.env)
+------------------
+    DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+    ORGANIZATION_ID   -- injected into every row (default: 1)
+    LOCATION_ID       -- injected into every row (default: 1)
+    CREATED_BY        -- user id for audit fields (default: 0)
+    DRY_RUN           -- "true" to preview without writing
+"""
+
+import argparse
+import hashlib
+import os
+import sys
+from datetime import datetime, timezone
+
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import text as sa_text
+
+sys.path.insert(0, os.path.dirname(__file__))
+load_dotenv()
+
+from scripts.logger import logger, log_error, write_summary, close as close_logger
+from scripts import customer_transformer as T
+
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# ── SQL (same table as migrate_customers.py) ───────────────────────────────────
+
+_INSERT_SQL = """
+    INSERT INTO storentic.customer (
+        external_id,
+        first_name, last_name, company_name,
+        address1, address2, city, state, zip, country, phone,
+        alternate_first_name, alternate_last_name,
+        alternate_address1, alternate_address2,
+        alternate_city, alternate_state, alternate_zip,
+        alternate_country, alternate_phone,
+        email, alternate_email,
+        mobile, access_gate_code,
+        driver_license_id, driver_license_issue_state,
+        organization_id, location_id,
+        customer_status_id,
+        created_by, updated_by, created_datetime, updated_datetime
+    ) VALUES (
+        :external_id,
+        :first_name, :last_name, :company_name,
+        :address1, :address2, :city, :state, :zip, :country, :phone,
+        :alternate_first_name, :alternate_last_name,
+        :alternate_address1, :alternate_address2,
+        :alternate_city, :alternate_state, :alternate_zip,
+        :alternate_country, :alternate_phone,
+        :email, :alternate_email,
+        :mobile, :access_gate_code,
+        :driver_license_id, :driver_license_issue_state,
+        :organization_id, :location_id,
+        :customer_status_id,
+        :created_by, :updated_by, :created_datetime, :updated_datetime
+    )
+"""
+
+_UPDATE_SQL = """
+    UPDATE storentic.customer SET
+        first_name       = :first_name,
+        last_name        = :last_name,
+        company_name     = :company_name,
+        address1         = :address1,
+        address2         = :address2,
+        city             = :city,
+        state            = :state,
+        zip              = :zip,
+        phone            = :phone,
+        email            = :email,
+        mobile           = :mobile,
+        access_gate_code = :access_gate_code,
+        location_id      = :location_id,
+        updated_by       = :updated_by,
+        updated_datetime = :updated_datetime
+    WHERE external_id = :external_id
+"""
+
+EXCEL_OUTPUT_COLUMNS = [
+    "external_id", "first_name", "last_name", "company_name",
+    "address1", "address2", "city", "state", "zip",
+    "phone", "mobile", "email", "access_gate_code",
+    "organization_id", "location_id",
+]
+
+
+# ── Step 1: Load, split active/former, deduplicate ─────────────────────────────
+
+def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Read the Former Tenants Excel file.
+
+    Returns:
+        (former_deduped_df, active_df)
+        - former_deduped_df : rows with ACTIVELEDGERS == 0, deduplicated
+        - active_df         : rows with ACTIVELEDGERS > 0, for review only
+    """
+    logger.info(f"Loading file: {filepath}")
+    df = pd.read_excel(filepath, dtype=str)
+    df.columns = df.columns.str.strip()
+    df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
+
+    required = {"FIRSTNAME", "LASTNAME", "ACTIVELEDGERS"}
+    missing = required - set(df.columns)
+    if missing:
+        raise SystemExit(f"Missing required columns in source file: {missing}")
+
+    logger.info(f"    Total rows      : {len(df)}")
+
+    # Split
+    active_mask    = ~df["ACTIVELEDGERS"].isin(["", "0"])
+    active_df      = df[active_mask].copy()
+    former_df      = df[~active_mask].copy()
+
+    logger.info(f"    Active (AL > 0) : {len(active_df)}")
+    logger.info(f"    Former (AL == 0): {len(former_df)}")
+
+    # Dedup former: keep most recent DATEMOVEDOUT per unique person
+    def _key(row):
+        name    = row["LASTNAME"].upper() + "," + row["FIRSTNAME"].upper()
+        contact = row.get("PHONE", "") or row.get("MOBILE", "") or row.get("EMAIL", "")
+        return name + "|" + contact
+
+    former_df = former_df.copy()
+    former_df["_key"]  = former_df.apply(_key, axis=1)
+    former_df["_sort"] = pd.to_datetime(former_df.get("DATEMOVEDOUT", ""), errors="coerce")
+    former_deduped = (
+        former_df.sort_values("_sort", na_position="first")
+                 .drop_duplicates(subset="_key", keep="last")
+                 .drop(columns=["_key", "_sort"])
+                 .reset_index(drop=True)
+    )
+
+    logger.info(f"    Former after dedup: {len(former_deduped)}")
+    return former_deduped, active_df
+
+
+# ── Step 2: Row transformer ────────────────────────────────────────────────────
+
+def _derive_external_id(row: pd.Series) -> str:
+    """
+    Build a stable, collision-safe external_id.
+    Prefers "FT-{GATECODE}".  Falls back to "FT-{md5[:8]}" when GATECODE is blank.
+    """
+    gatecode = T.clean_str(row.get("GATECODE", ""))
+    if gatecode:
+        return f"FT-{gatecode}"
+    key = (
+        str(row.get("LASTNAME", "")).upper() +
+        str(row.get("FIRSTNAME", "")).upper() +
+        str(row.get("PHONE", "") or row.get("MOBILE", "") or row.get("EMAIL", ""))
+    )
+    return "FT-" + hashlib.md5(key.encode()).hexdigest()[:8]
+
+
+def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int) -> dict:
+    """Map one Former Tenants Excel row to a storentic.customer dict."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return {
+        "external_id":                  _derive_external_id(row),
+        "first_name":                   T.derive_full_name(row.get("FIRSTNAME"), row.get("MI")),
+        "last_name":                    T.clean_str(row.get("LASTNAME")),
+        "company_name":                 T.clean_str(row.get("COMPANY")),
+        "address1":                     T.clean_str(row.get("ADDRESS1")),
+        "address2":                     T.clean_str(row.get("ADDRESS2")),
+        "city":                         T.clean_str(row.get("CITY")),
+        "state":                        T.clean_str(row.get("STATE")),
+        "zip":                          T.clean_str(row.get("ZIPCODE")),
+        "country":                      None,
+        "phone":                        T.clean_str(row.get("PHONE")),
+        # Former tenant format has no alternate contact fields
+        "alternate_first_name":         None,
+        "alternate_last_name":          None,
+        "alternate_address1":           None,
+        "alternate_address2":           None,
+        "alternate_city":               None,
+        "alternate_state":              None,
+        "alternate_zip":                None,
+        "alternate_country":            None,
+        "alternate_phone":              None,
+        "email":                        T.clean_str(row.get("EMAIL")),
+        "alternate_email":              None,
+        "mobile":                       T.clean_str(row.get("MOBILE")),
+        "access_gate_code":             T.clean_str(row.get("GATECODE")),
+        "driver_license_id":            None,
+        "driver_license_issue_state":   None,
+        "organization_id":              org_id,
+        "location_id":                  loc_id,
+        "customer_status_id":           2,        # 2 = Former tenant
+        "created_by":                   created_by,
+        "updated_by":                   created_by,
+        "created_datetime":             now,
+        "updated_datetime":             now,
+    }
+
+
+# ── Step 3: Idempotency — load already-imported FT-* ids ──────────────────────
+
+def load_existing_external_ids(engine) -> set[str]:
+    logger.info("Loading existing FT-* external_ids ...")
+    with engine.connect() as conn:
+        rows = conn.execute(sa_text(
+            "SELECT external_id FROM storentic.customer "
+            "WHERE external_id LIKE 'FT-%'"
+        )).fetchall()
+    ids = {r.external_id for r in rows}
+    logger.info(f"    Already imported: {len(ids)} former customers")
+    return ids
+
+
+# ── Step 4: Main processing loop ───────────────────────────────────────────────
+
+def process(
+    df: pd.DataFrame,
+    org_id: int,
+    loc_id: int,
+    created_by: int,
+    output_mode: str,
+    dry_run: bool,
+    existing_ids: set[str],
+    engine,
+    out_file: str,
+) -> dict:
+
+    stats = {
+        "total": 0, "inserted": 0, "updated": 0,
+        "skipped_dup": 0, "errors": 0,
+        "dry_run": dry_run, "output_mode": output_mode,
+    }
+    excel_records = []
+    total = len(df)
+    print(f"  Processing {total:,} former customers ...\n", flush=True)
+
+    for row_idx, row in df.iterrows():
+        stats["total"] += 1
+
+        try:
+            record = transform_row(row, org_id, loc_id, created_by)
+        except Exception as exc:
+            log_error(row_idx + 2, row.get("LASTNAME", ""), "TRANSFORM", str(exc), None)
+            stats["errors"] += 1
+            continue
+
+        if not record.get("last_name"):
+            log_error(row_idx + 2, "UNKNOWN", "LASTNAME", "last_name is blank — skipped", None)
+            stats["errors"] += 1
+            continue
+
+        ext_id       = record["external_id"]
+        display_name = f"{record.get('first_name') or ''} {record.get('last_name') or ''}".strip()
+
+        if ext_id in existing_ids:
+            stats["skipped_dup"] += 1
+            continue
+
+        # Excel mode
+        if output_mode == "excel":
+            excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
+            existing_ids.add(ext_id)
+            stats["inserted"] += 1
+            continue
+
+        # Dry run
+        if dry_run:
+            logger.debug(f"[DRY RUN] {display_name}  ext_id={ext_id}")
+            stats["inserted"] += 1
+            continue
+
+        # Live DB write
+        try:
+            with engine.begin() as conn:
+                exists = conn.execute(sa_text(
+                    "SELECT id FROM storentic.customer "
+                    "WHERE external_id = :eid LIMIT 1"
+                ), {"eid": ext_id}).fetchone()
+
+                if exists:
+                    conn.execute(sa_text(_UPDATE_SQL), record)
+                    logger.debug(f"Updated : {display_name} ({ext_id})")
+                    stats["updated"] += 1
+                else:
+                    conn.execute(sa_text(_INSERT_SQL), record)
+                    logger.debug(f"Inserted: {display_name} ({ext_id})")
+                    stats["inserted"] += 1
+
+            existing_ids.add(ext_id)
+
+        except Exception as exc:
+            exc_str = str(exc)
+            is_conn_err = any(k in exc_str for k in (
+                "could not translate host name", "could not connect",
+                "connection refused", "OperationalError", "timeout",
+            ))
+            if is_conn_err:
+                print(f"\n  ERROR: DB connection lost — {exc_str[:120]}\n"
+                      f"  Re-run the script; already-imported rows will be skipped.\n",
+                      flush=True)
+                raise SystemExit(1)
+            log_error(row_idx + 2, display_name, "DB_INSERT", exc_str, ext_id)
+            stats["errors"] += 1
+
+        # Progress every 500 rows
+        if stats["total"] % 500 == 0:
+            pct = stats["total"] / total * 100
+            print(
+                f"  {pct:5.1f}%  |  {stats['total']:,}/{total:,}"
+                f"  inserted={stats['inserted']:,}"
+                f"  skipped={stats['skipped_dup']:,}"
+                f"  errors={stats['errors']:,}",
+                flush=True,
+            )
+
+    # Flush Excel
+    if output_mode == "excel" and excel_records:
+        _write_excel(excel_records, out_file)
+        stats["excel_output"] = out_file
+
+    return stats
+
+
+def _write_excel(records: list[dict], out_path: str):
+    df_out = pd.DataFrame(records, columns=EXCEL_OUTPUT_COLUMNS)
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        df_out.to_excel(writer, index=False, sheet_name="Former Customers")
+        ws = writer.sheets["Former Customers"]
+        for col_cells in ws.columns:
+            max_len = max(len(str(c.value)) if c.value is not None else 0 for c in col_cells)
+            ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 45)
+    print(f"  Excel written: {out_path}  ({len(records):,} rows)", flush=True)
+    logger.info(f"Excel output: {out_path}  ({len(records):,} rows)")
+
+
+def _write_active_review(df_active: pd.DataFrame, out_path: str):
+    """Save active-ledger rows to a separate Excel file for manual review."""
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        df_active.to_excel(writer, index=False, sheet_name="Active Ledgers")
+        ws = writer.sheets["Active Ledgers"]
+        for col_cells in ws.columns:
+            max_len = max(len(str(c.value)) if c.value is not None else 0 for c in col_cells)
+            ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 40)
+    print(f"  Active-ledger review: {out_path}  ({len(df_active):,} rows)", flush=True)
+    logger.info(f"Active review file: {out_path}")
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────────
+
+def parse_args(args=None):
+    p = argparse.ArgumentParser(
+        description="SiteLink Former Tenants -> storentic.customer migration"
+    )
+    p.add_argument("--file",     required=True, help="Path to Former Tenants Excel file")
+    p.add_argument("--output",   default="db",  choices=["db", "excel"],
+                   help="'db' (default) or 'excel'")
+    p.add_argument("--out-file", default=None,  help="[excel mode] Output file path")
+    p.add_argument("--dry-run",  action="store_true",
+                   help="Preview counts without writing to DB")
+    return p.parse_args(args)
+
+
+def main(args=None):
+    if args is None:
+        args = parse_args()
+
+    output_mode = args.output
+    dry_run     = args.dry_run or os.getenv("DRY_RUN", "false").lower() == "true"
+    org_id      = int(os.getenv("ORGANIZATION_ID", 1))
+    loc_id      = int(os.getenv("LOCATION_ID", 1))
+    created_by  = int(os.getenv("CREATED_BY", 0))
+
+    ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_file = args.out_file or os.path.join(OUTPUT_DIR, f"former_customers_{ts}.xlsx")
+    active_review_file = os.path.join(OUTPUT_DIR, "active_ledgers_review.xlsx")
+
+    print(
+        f"\n  Former Customers Migration"
+        f"\n  Mode: {output_mode.upper()}{'  [DRY RUN]' if dry_run else ''}"
+        f"  |  org={org_id}  loc={loc_id}  created_by={created_by}\n",
+        flush=True,
+    )
+    logger.info("=" * 65)
+    logger.info("FORMER CUSTOMERS ETL MIGRATION STARTING")
+    logger.info(f"File        : {args.file}")
+    logger.info(f"Output mode : {output_mode.upper()}")
+    logger.info(f"Dry run     : {dry_run}")
+    logger.info(f"Org/Loc/By  : {org_id}/{loc_id}/{created_by}")
+    logger.info("=" * 65)
+
+    # Step 1: Load + split + dedup
+    former_df, active_df = load_and_prepare(args.file)
+    _write_active_review(active_df, active_review_file)
+
+    # Step 2: DB connection
+    engine = None
+    if output_mode == "db" and not dry_run:
+        try:
+            from scripts.db import get_engine
+            engine = get_engine()
+            logger.info("Database connection established.")
+        except Exception as exc:
+            print(f"\n  ERROR: Cannot connect to DB: {exc}\n", flush=True)
+            sys.exit(1)
+
+    # Step 3: Load existing ids for idempotency
+    existing_ids: set[str] = set()
+    if output_mode == "db" and not dry_run:
+        existing_ids = load_existing_external_ids(engine)
+
+    # Step 4: Process
+    stats = process(
+        df           = former_df,
+        org_id       = org_id,
+        loc_id       = loc_id,
+        created_by   = created_by,
+        output_mode  = output_mode,
+        dry_run      = dry_run,
+        existing_ids = existing_ids,
+        engine       = engine,
+        out_file     = out_file,
+    )
+
+    # Step 5: Summary
+    from scripts.logger import LOG_FILE, ERROR_CSV
+    lines = [
+        "=" * 65,
+        "  FORMER CUSTOMERS MIGRATION — SUMMARY",
+        f"  Run timestamp  : {ts}",
+        f"  Output mode    : {output_mode.upper()}",
+        f"  Dry run        : {dry_run}",
+        "=" * 65,
+        f"  Total rows (after dedup)   : {stats['total']:,}",
+        f"  Inserted                   : {stats['inserted']:,}",
+        f"  Updated (already existed)  : {stats['updated']:,}",
+        f"  Skipped (already imported) : {stats['skipped_dup']:,}",
+        f"  Errors / rejected          : {stats['errors']:,}",
+        "=" * 65,
+        f"  Active-ledger review : {active_review_file}",
+        f"  Log file             : {LOG_FILE}",
+        f"  Error CSV            : {ERROR_CSV}",
+        "=" * 65,
+    ]
+    if stats.get("excel_output"):
+        lines.insert(-1, f"  Excel output : {stats['excel_output']}")
+
+    text = "\n".join(lines)
+    print("\n" + text, flush=True)
+    logger.info(text)
+    close_logger()
+
+
+if __name__ == "__main__":
+    main()
