@@ -17,12 +17,15 @@ from typing import Optional
 
 # SiteLink exports dates in various formats; try them in order.
 _DATE_FORMATS = [
+    "%m/%d/%Y %H:%M:%S.%f",
     "%m/%d/%Y %H:%M:%S",
     "%m/%d/%Y %H:%M",
     "%m/%d/%Y",
+    "%Y-%m-%d %H:%M:%S.%f",
     "%Y-%m-%d %H:%M:%S",
     "%Y-%m-%d",
     # Dash-separated variants (present in some SiteLink export flavours, e.g. Payments_1.csv)
+    "%m-%d-%Y %H:%M:%S.%f",
     "%m-%d-%Y %H:%M:%S",
     "%m-%d-%Y %H:%M",
     "%m-%d-%Y",

@@ -304,7 +304,7 @@ def process_payments(
     Returns a stats dict.
     """
     logger.info(f"📂  Loading payments file: {payments_file}")
-    df = pd.read_csv(payments_file, dtype=str, low_memory=False)
+    df = pd.read_csv(payments_file, dtype=str, low_memory=False, encoding='latin-1')
     df.columns = df.columns.str.strip()
     logger.info(f"    Total payment rows: {len(df)}")
     print(f"  Processing {len(df):,} rows — progress every 10,000 rows  (full detail in log file)\n", flush=True)
