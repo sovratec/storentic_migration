@@ -69,6 +69,7 @@ from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import text as sa_text
+from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
@@ -81,49 +82,28 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── SQL ────────────────────────────────────────────────────────────────────────
 
+# Used by execute_values — %s is the multi-row placeholder
 _INSERT_SQL = """
     INSERT INTO storentic.ledger_charges (
-        customer_id,
-        unit_id,
-        location_id,
-        organization_id,
-        charge_type_id,
-        amount_in_cents,
-        effective_date,
-        memo,
-        internal_note,
-        status,
-        invoice_id,
-        source_screen,
-        reversed_by_id,
-        reversed_at,
-        reversal_reason,
-        created_by,
-        created_at,
-        updated_at,
+        customer_id, unit_id, location_id, organization_id,
+        charge_type_id, amount_in_cents, effective_date,
+        memo, internal_note, status, invoice_id,
+        source_screen, reversed_by_id, reversed_at,
+        reversal_reason, created_by, created_at, updated_at,
         external_charge_id
-    ) VALUES (
-        :customer_id,
-        :unit_id,
-        :location_id,
-        :organization_id,
-        :charge_type_id,
-        :amount_in_cents,
-        :effective_date,
-        :memo,
-        :internal_note,
-        :status,
-        :invoice_id,
-        :source_screen,
-        :reversed_by_id,
-        :reversed_at,
-        :reversal_reason,
-        :created_by,
-        :created_at,
-        :updated_at,
-        :external_charge_id
-    )
+    ) VALUES %s
+    ON CONFLICT (external_charge_id) DO NOTHING
 """
+
+# Column order must match _INSERT_SQL above
+_INSERT_COLS = [
+    "customer_id", "unit_id", "location_id", "organization_id",
+    "charge_type_id", "amount_in_cents", "effective_date",
+    "memo", "internal_note", "status", "invoice_id",
+    "source_screen", "reversed_by_id", "reversed_at",
+    "reversal_reason", "created_by", "created_at", "updated_at",
+    "external_charge_id",
+]
 
 EXCEL_OUTPUT_COLUMNS = [
     "external_charge_id", "customer_id", "unit_id", "location_id",
@@ -356,6 +336,11 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
 # STEP 4 — Main processing loop
 # =============================================================================
 
+def _record_to_tuple(record: dict) -> tuple:
+    """Convert a record dict to an ordered tuple matching _INSERT_COLS."""
+    return tuple(record[col] for col in _INSERT_COLS)
+
+
 def process_charges(
     charges_file: str,
     charge_type_map: dict,
@@ -374,39 +359,45 @@ def process_charges(
     batch_size: int,
 ) -> dict:
 
+    # ── Read source Excel ──────────────────────────────────────────────────────
     logger.info(f"📂  Loading charges file: {charges_file}")
-    df = pd.read_excel(charges_file)
+    df = pd.read_excel(charges_file, engine="openpyxl",
+                       dtype={"ChargeID": "float64", "ChargeDescID": "float64",
+                              "LedgerID": "float64", "dcAmt": "float64",
+                              "bNSF": "bool", "bMoveIn": "bool", "bMoveOut": "bool"})
     df.columns = df.columns.str.strip()
-
-    # Drop summary/total rows (no ChargeID)
     df = df[df["ChargeID"].notna()].copy()
     logger.info(f"    Charge rows to process: {len(df):,}")
-    print(f"\n  Processing {len(df):,} rows — progress every 10,000\n", flush=True)
+    print(f"\n  Processing {len(df):,} rows — batch size {batch_size:,}\n", flush=True)
 
     stats = {
-        "total":            0,
-        "inserted":         0,
-        "skipped_dup":      0,
-        "skipped_no_cust":  0,
-        "skipped_no_ct":    0,
-        "errors":           0,
-        "dry_run":          dry_run,
-        "output_mode":      output_mode,
+        "total": 0, "inserted": 0, "skipped_dup": 0,
+        "skipped_no_cust": 0, "skipped_no_ct": 0,
+        "errors": 0, "dry_run": dry_run, "output_mode": output_mode,
     }
 
-    excel_records  = []
-    skipped_rows   = []
-    batch          = []
-    batch_row_idxs = []
+    excel_records = []
+    skipped_rows  = []
+    batch_tuples  = []   # list of tuples for execute_values
+    batch_ids     = []   # parallel list of charge_ids for logging on error
+
+    # ── Get raw psycopg2 connection once — reused for all batches ─────────────
+    raw_conn   = None
+    raw_cursor = None
+    if output_mode == "db" and not dry_run:
+        raw_conn   = engine.raw_connection()
+        raw_cursor = raw_conn.cursor()
 
     def flush_batch():
-        if not batch:
+        if not batch_tuples:
             return
         try:
-            with engine.begin() as conn:
-                conn.execute(sa_text(_INSERT_SQL), batch)
-            stats["inserted"] += len(batch)
+            execute_values(raw_cursor, _INSERT_SQL, batch_tuples, page_size=batch_size)
+            raw_conn.commit()
+            stats["inserted"] += len(batch_tuples)
+            logger.info(f"    Flushed batch: {len(batch_tuples):,} rows committed.")
         except Exception as exc:
+            raw_conn.rollback()
             exc_str = str(exc)
             is_conn_err = any(kw in exc_str for kw in (
                 "could not translate host name", "could not connect to server",
@@ -414,43 +405,39 @@ def process_charges(
             ))
             if is_conn_err:
                 logger.error(f"DB connection lost: {exc_str[:200]}")
-                print(f"\n  ERROR: DB connection lost — {exc_str[:120]}\n"
-                      f"  Re-run the script; already-imported rows will be skipped.\n",
-                      flush=True)
-                batch.clear()
-                batch_row_idxs.clear()
+                print(f"\n  ERROR: DB connection lost — re-run to resume.\n", flush=True)
                 raise SystemExit(1)
-
-            # Data error — fall back to row-by-row
+            # Data error — fall back to row-by-row for this batch only
             logger.warning(f"Batch insert failed ({exc_str[:120]}); retrying row-by-row ...")
-            for rec, ridx in zip(batch, batch_row_idxs):
+            for tup, cid in zip(batch_tuples, batch_ids):
                 try:
-                    with engine.begin() as conn:
-                        conn.execute(sa_text(_INSERT_SQL), rec)
+                    execute_values(raw_cursor, _INSERT_SQL, [tup])
+                    raw_conn.commit()
                     stats["inserted"] += 1
                 except Exception as row_exc:
-                    log_error(ridx, rec.get("external_charge_id"), "DB_INSERT",
-                              str(row_exc), rec.get("external_charge_id"))
+                    raw_conn.rollback()
+                    log_error(0, cid, "DB_INSERT", str(row_exc), cid)
                     stats["errors"] += 1
         finally:
-            batch.clear()
-            batch_row_idxs.clear()
+            batch_tuples.clear()
+            batch_ids.clear()
 
+    # ── Main row loop ──────────────────────────────────────────────────────────
     for row_idx, row in df.iterrows():
         stats["total"] += 1
         excel_row = row_idx + 2
 
-        # ── Parse ChargeID ────────────────────────────────────────────────────
+        # ── Parse key IDs ─────────────────────────────────────────────────────
         try:
-            charge_id     = str(int(float(row["ChargeID"])))
-            charge_desc_id = int(float(row["ChargeDescID"]))
-            ledger_id      = int(float(row["LedgerID"]))
+            charge_id      = str(int(row["ChargeID"]))
+            charge_desc_id = int(row["ChargeDescID"])
+            ledger_id      = int(row["LedgerID"])
         except (ValueError, TypeError) as exc:
             log_error(excel_row, row.get("ChargeID"), "PARSE", str(exc), row.get("ChargeID"))
             stats["errors"] += 1
             continue
 
-        # ── Deduplication ─────────────────────────────────────────────────────
+        # ── Dedup (in-memory — ON CONFLICT also handles DB-level) ────────────
         if charge_id in existing_ids:
             stats["skipped_dup"] += 1
             continue
@@ -459,15 +446,11 @@ def process_charges(
         charge_type_id = charge_type_map.get(charge_desc_id)
         if charge_type_id is None:
             reason = f"ChargeDescID {charge_desc_id} not in charge_type mapping"
-            logger.warning(f"Row {excel_row}: {reason}")
             skipped_rows.append({
-                "ChargeID":     charge_id,
-                "ChargeDescID": charge_desc_id,
-                "LedgerID":     ledger_id,
-                "dcAmt":        row.get("dcAmt"),
-                "dChgStrt":     row.get("dChgStrt"),
-                "dCreated":     row.get("dCreated"),
-                "skip_reason":  reason,
+                "ChargeID": charge_id, "ChargeDescID": charge_desc_id,
+                "LedgerID": ledger_id, "dcAmt": row.get("dcAmt"),
+                "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
+                "skip_reason": reason,
             })
             stats["skipped_no_ct"] += 1
             continue
@@ -476,22 +459,17 @@ def process_charges(
         tenant_id   = ledger_to_tenant.get(ledger_id)
         customer_id = customer_map.get(tenant_id) if tenant_id else None
         if customer_id is None:
-            reason = (f"LedgerID {ledger_id} → TenantID {tenant_id} "
-                      f"not found in storentic.customer")
-            logger.warning(f"Row {excel_row}: {reason}")
+            reason = f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer"
             skipped_rows.append({
-                "ChargeID":     charge_id,
-                "ChargeDescID": charge_desc_id,
-                "LedgerID":     ledger_id,
-                "dcAmt":        row.get("dcAmt"),
-                "dChgStrt":     row.get("dChgStrt"),
-                "dCreated":     row.get("dCreated"),
-                "skip_reason":  reason,
+                "ChargeID": charge_id, "ChargeDescID": charge_desc_id,
+                "LedgerID": ledger_id, "dcAmt": row.get("dcAmt"),
+                "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
+                "skip_reason": reason,
             })
             stats["skipped_no_cust"] += 1
             continue
 
-        # ── Resolve unit_id (nullable — best effort) ──────────────────────────
+        # ── Resolve unit_id (nullable) ────────────────────────────────────────
         unit_name = ledger_to_unitname.get(ledger_id)
         unit_id   = unit_map.get(unit_name) if unit_name else None
 
@@ -504,58 +482,51 @@ def process_charges(
             stats["errors"] += 1
             continue
 
-        # ── Route to output ───────────────────────────────────────────────────
+        # ── Route ─────────────────────────────────────────────────────────────
         if output_mode == "excel":
             excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
             existing_ids.add(charge_id)
             stats["inserted"] += 1
 
         elif dry_run:
-            logger.debug(
-                f"[DRY RUN] ChargeID={charge_id} customer={customer_id} "
-                f"unit={unit_id} amount={record['amount_in_cents']}c "
-                f"status={record['status']}"
-            )
             stats["inserted"] += 1
 
         else:
-            batch.append(record)
-            batch_row_idxs.append(excel_row)
+            batch_tuples.append(_record_to_tuple(record))
+            batch_ids.append(charge_id)
             existing_ids.add(charge_id)
-            if len(batch) >= batch_size:
+            if len(batch_tuples) >= batch_size:
                 flush_batch()
 
-        # ── Progress print ────────────────────────────────────────────────────
+        # ── Progress ──────────────────────────────────────────────────────────
         if stats["total"] % 10_000 == 0:
             pct = stats["total"] / len(df) * 100
             print(
-                f"  {pct:5.1f}%  |  processed {stats['total']:,} / {len(df):,}"
-                f"  |  inserted {stats['inserted']:,}"
-                f"  |  skipped_no_cust {stats['skipped_no_cust']:,}"
-                f"  |  skipped_no_ct {stats['skipped_no_ct']:,}"
-                f"  |  errors {stats['errors']:,}",
+                f"  {pct:5.1f}%  |  {stats['total']:,}/{len(df):,}"
+                f"  inserted={stats['inserted']:,}"
+                f"  skip_cust={stats['skipped_no_cust']:,}"
+                f"  skip_ct={stats['skipped_no_ct']:,}"
+                f"  err={stats['errors']:,}",
                 flush=True,
             )
 
-    # ── Flush final batch ─────────────────────────────────────────────────────
-    if not dry_run and output_mode == "db":
+    # ── Flush remainder and close connection ──────────────────────────────────
+    if output_mode == "db" and not dry_run:
         flush_batch()
+        raw_cursor.close()
+        raw_conn.close()
 
-    # ── Write main Excel output ───────────────────────────────────────────────
-    if output_mode == "excel":
-        if excel_records:
-            _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "LedgerCharges")
-            stats["excel_output"] = out_file
-        else:
-            logger.warning("⚠️   No records to write — Excel file not created.")
+    # ── Write Excel outputs ───────────────────────────────────────────────────
+    if output_mode == "excel" and excel_records:
+        _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "LedgerCharges")
+        stats["excel_output"] = out_file
 
-    # ── Write skipped rows Excel ──────────────────────────────────────────────
     if skipped_rows:
-        ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts           = datetime.now().strftime("%Y%m%d_%H%M%S")
         skipped_path = os.path.join(OUTPUT_DIR, f"ledger_charges_skipped_{ts}.xlsx")
         _write_excel(skipped_rows, skipped_path, SKIPPED_COLUMNS, "Skipped")
         stats["skipped_output"] = skipped_path
-        print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows written to: {skipped_path}", flush=True)
+        print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows → {skipped_path}", flush=True)
 
     return stats
 
@@ -643,7 +614,7 @@ def main(args=None):
     org_id      = int(os.getenv("ORGANIZATION_ID", 1))
     loc_id      = int(os.getenv("LOCATION_ID", 1))
     created_by  = int(os.getenv("CREATED_BY", 0))
-    batch_size  = int(os.getenv("BATCH_SIZE", 500))
+    batch_size  = int(os.getenv("BATCH_SIZE", 5000))
 
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = args.out_file or os.path.join(OUTPUT_DIR, f"ledger_charges_transformed_{ts}.xlsx")
