@@ -92,7 +92,7 @@ _INSERT_SQL = """
         reversal_reason, created_by, created_at, updated_at,
         external_charge_id
     ) VALUES %s
-    ON CONFLICT (external_charge_id) DO NOTHING
+    ON CONFLICT (external_charge_id) WHERE external_charge_id IS NOT NULL DO NOTHING
 """
 
 # Column order must match _INSERT_SQL above
@@ -188,7 +188,7 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
 # =============================================================================
 
 def check_external_charge_id_column(engine):
-    """Verify V7 SQL migration has been applied."""
+    """Verify V7 SQL migration has been fully applied (column + unique index)."""
     with engine.connect() as conn:
         col_exists = conn.execute(sa_text(
             "SELECT 1 FROM information_schema.columns "
@@ -197,18 +197,32 @@ def check_external_charge_id_column(engine):
             "  AND column_name  = 'external_charge_id'"
         )).fetchone()
 
+        idx_exists = conn.execute(sa_text(
+            "SELECT 1 FROM pg_indexes "
+            "WHERE schemaname = 'storentic' "
+            "  AND tablename  = 'ledger_charges' "
+            "  AND indexname  = 'idx_ledger_charges_external_charge_id'"
+        )).fetchone()
+
+    remediation = (
+        "\n    Run in DBeaver / psql:\n\n"
+        "      ALTER TABLE storentic.ledger_charges\n"
+        "          ADD COLUMN IF NOT EXISTS external_charge_id VARCHAR(100);\n\n"
+        "      CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_charges_external_charge_id\n"
+        "          ON storentic.ledger_charges(external_charge_id)\n"
+        "          WHERE external_charge_id IS NOT NULL;\n"
+    )
+
     if not col_exists:
         raise SystemExit(
-            "\n❌  Column 'external_charge_id' does not exist on storentic.ledger_charges.\n\n"
-            "    Run the V7 SQL migration first:\n\n"
-            "      psql -h <DB_HOST> -U <DB_USER> -d storentic \\\n"
-            "           -f sql/V7__ledger_charges_external_charge_id.sql\n\n"
-            "    Or paste into DBeaver / pgAdmin:\n\n"
-            "      ALTER TABLE storentic.ledger_charges\n"
-            "          ADD COLUMN IF NOT EXISTS external_charge_id VARCHAR(100);\n\n"
-            "      CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_charges_external_charge_id\n"
-            "          ON storentic.ledger_charges(external_charge_id)\n"
-            "          WHERE external_charge_id IS NOT NULL;\n"
+            "\n❌  Column 'external_charge_id' missing on storentic.ledger_charges."
+            + remediation
+        )
+
+    if not idx_exists:
+        raise SystemExit(
+            "\n❌  Unique index 'idx_ledger_charges_external_charge_id' is missing.\n"
+            "    ON CONFLICT requires this index to exist." + remediation
         )
 
 
