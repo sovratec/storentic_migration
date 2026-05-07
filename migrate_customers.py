@@ -92,15 +92,19 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
         col_name = col.get(key)
         return row.get(col_name) if col_name else None
 
-    last_name = T.clean_str(get(COL_LNAME))
+    last_name   = T.clean_str(get(COL_LNAME))
+    external_id = T.clean_str(get(COL_TENANT_ID))
 
-    # Critical check: last_name must exist
+    if not external_id:
+        log_error(row_idx + 2, "UNKNOWN", COL_TENANT_ID, "TenantId is blank — row rejected", None)
+        return None
+
     if not last_name:
         log_error(row_idx + 2, "UNKNOWN", COL_LNAME, "sLname is blank — row rejected", None)
         return None
 
     record = {
-        "external_id":                  T.clean_str(get(COL_TENANT_ID)),
+        "external_id":                  external_id,
         "external_source":              external_source,
         "first_name":                   T.derive_full_name(get(COL_FNAME), get(COL_MI)),
         "last_name":                    last_name,
@@ -336,7 +340,7 @@ def main(args=None):
             stats["errors"] += 1
             continue
 
-        external_id = record.get("external_id") or f"row-{row_idx + 2}"
+        external_id = record["external_id"]
         display_name = f"{record.get('first_name', '')} {record.get('last_name', '')}".strip()
 
         # ── Excel output mode ─────────────────────────────────────────────────

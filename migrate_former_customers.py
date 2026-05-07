@@ -16,10 +16,10 @@ Key behaviours
    output/active_ledgers_review.xlsx and excluded from import.
 2. Remaining rows are deduplicated by (LASTNAME, FIRSTNAME, PHONE/MOBILE/EMAIL)
    keeping the row with the most recent DATEMOVEDOUT.
-3. external_id = "FT-{GATECODE}" — prefixed so it never collides with the
-   numeric TenantId values used by active customers (migrate_customers.py).
-   Falls back to "FT-{8-char hash}" when GATECODE is blank.
-4. Fully idempotent: re-runs skip already-imported FT-* external_ids.
+3. external_id = TenantId from the input file (same column used by active
+   customers). Rows with a blank or missing TenantId are rejected.
+4. Fully idempotent: re-runs skip rows whose external_id already exists in
+   storentic.customer (checks both active and former customers).
 5. Same INSERT/UPDATE SQL and storentic.customer table as migrate_customers.py.
 
 Usage
@@ -161,20 +161,22 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 # ── Step 2: Row transformer ────────────────────────────────────────────────────
 
-def _derive_external_id(row: pd.Series) -> str | None:
+def _extract_tenant_id(row: pd.Series) -> str | None:
     """
-    Return TenantId from the row if the column is present and non-blank, else None.
-    When None, external_id is stored as NULL — no deduplication is possible on re-run.
+    Case-insensitive lookup for the TenantId column.
+    Returns the stripped string value, or None if the column is absent or blank.
     """
-    tenant_id = T.clean_str(row.get("TenantId", ""))
-    return tenant_id if tenant_id else None
+    for col in row.index:
+        if col.strip().lower() == "tenantid":
+            return T.clean_str(row[col]) or None
+    return None
 
 
 def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int, external_source: str | None = None) -> dict:
     """Map one Former Tenants Excel row to a storentic.customer dict."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     return {
-        "external_id":                  _derive_external_id(row),
+        "external_id":                  _extract_tenant_id(row),
         "external_source":              external_source,
         "first_name":                   T.derive_full_name(row.get("FIRSTNAME"), row.get("MI")),
         "last_name":                    T.clean_str(row.get("LASTNAME")),
@@ -269,15 +271,20 @@ def process(
         ext_id       = record["external_id"]
         display_name = f"{record.get('first_name') or ''} {record.get('last_name') or ''}".strip()
 
-        if ext_id is not None and ext_id in existing_ids:
+        if ext_id is None:
+            log_error(row_idx + 2, display_name, "MISSING_TENANT_ID",
+                      "TenantId is blank — cannot deduplicate, row skipped", None)
+            stats["errors"] += 1
+            continue
+
+        if ext_id in existing_ids:
             stats["skipped_dup"] += 1
             continue
 
         # Excel mode
         if output_mode == "excel":
             excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
-            if ext_id is not None:
-                existing_ids.add(ext_id)
+            existing_ids.add(ext_id)
             stats["inserted"] += 1
             continue
 
@@ -304,8 +311,7 @@ def process(
                     logger.debug(f"Inserted: {display_name} ({ext_id})")
                     stats["inserted"] += 1
 
-            if ext_id is not None:
-                existing_ids.add(ext_id)
+            existing_ids.add(ext_id)
 
         except Exception as exc:
             exc_str = str(exc)
