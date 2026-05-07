@@ -43,7 +43,6 @@ Environment (.env)
 """
 
 import argparse
-import hashlib
 import os
 import sys
 from datetime import datetime, timezone
@@ -65,7 +64,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _INSERT_SQL = """
     INSERT INTO storentic.customer (
-        external_id,
+        external_id, external_source,
         first_name, last_name, company_name,
         address1, address2, city, state, zip, country, phone,
         alternate_first_name, alternate_last_name,
@@ -79,7 +78,7 @@ _INSERT_SQL = """
         customer_status_id,
         created_by, updated_by, created_datetime, updated_datetime
     ) VALUES (
-        :external_id,
+        :external_id, :external_source,
         :first_name, :last_name, :company_name,
         :address1, :address2, :city, :state, :zip, :country, :phone,
         :alternate_first_name, :alternate_last_name,
@@ -109,6 +108,7 @@ _UPDATE_SQL = """
         email            = :email,
         mobile           = :mobile,
         access_gate_code = :access_gate_code,
+        external_source  = :external_source,
         location_id      = :location_id,
         updated_by       = :updated_by,
         updated_datetime = :updated_datetime
@@ -130,9 +130,12 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     Read the Former Tenants Excel file.
 
     Returns:
-        (former_deduped_df, active_df)
-        - former_deduped_df : rows with ACTIVELEDGERS == 0, deduplicated
-        - active_df         : rows with ACTIVELEDGERS > 0, for review only
+        (former_df, active_df)
+        - former_df : rows with ACTIVELEDGERS == 0
+        - active_df : rows with ACTIVELEDGERS > 0, for review only
+
+    Deduplication is handled at insert time by checking external_id against
+    the customer table, not here.
     """
     logger.info(f"Loading file: {filepath}")
     df = pd.read_excel(filepath, dtype=str)
@@ -146,57 +149,33 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     logger.info(f"    Total rows      : {len(df)}")
 
-    # Split
-    active_mask    = ~df["ACTIVELEDGERS"].isin(["", "0"])
-    active_df      = df[active_mask].copy()
-    former_df      = df[~active_mask].copy()
+    active_mask = ~df["ACTIVELEDGERS"].isin(["", "0"])
+    active_df   = df[active_mask].copy()
+    former_df   = df[~active_mask].reset_index(drop=True)
 
     logger.info(f"    Active (AL > 0) : {len(active_df)}")
     logger.info(f"    Former (AL == 0): {len(former_df)}")
 
-    # Dedup former: keep most recent DATEMOVEDOUT per unique person
-    def _key(row):
-        name    = row["LASTNAME"].upper() + "," + row["FIRSTNAME"].upper()
-        contact = row.get("PHONE", "") or row.get("MOBILE", "") or row.get("EMAIL", "")
-        return name + "|" + contact
-
-    former_df = former_df.copy()
-    former_df["_key"]  = former_df.apply(_key, axis=1)
-    former_df["_sort"] = pd.to_datetime(former_df.get("DATEMOVEDOUT", ""), errors="coerce")
-    former_deduped = (
-        former_df.sort_values("_sort", na_position="first")
-                 .drop_duplicates(subset="_key", keep="last")
-                 .drop(columns=["_key", "_sort"])
-                 .reset_index(drop=True)
-    )
-
-    logger.info(f"    Former after dedup: {len(former_deduped)}")
-    return former_deduped, active_df
+    return former_df, active_df
 
 
 # ── Step 2: Row transformer ────────────────────────────────────────────────────
 
-def _derive_external_id(row: pd.Series) -> str:
+def _derive_external_id(row: pd.Series) -> str | None:
     """
-    Build a stable, collision-safe external_id.
-    Prefers "FT-{GATECODE}".  Falls back to "FT-{md5[:8]}" when GATECODE is blank.
+    Return TenantId from the row if the column is present and non-blank, else None.
+    When None, external_id is stored as NULL — no deduplication is possible on re-run.
     """
-    gatecode = T.clean_str(row.get("GATECODE", ""))
-    if gatecode:
-        return f"FT-{gatecode}"
-    key = (
-        str(row.get("LASTNAME", "")).upper() +
-        str(row.get("FIRSTNAME", "")).upper() +
-        str(row.get("PHONE", "") or row.get("MOBILE", "") or row.get("EMAIL", ""))
-    )
-    return "FT-" + hashlib.md5(key.encode()).hexdigest()[:8]
+    tenant_id = T.clean_str(row.get("TenantId", ""))
+    return tenant_id if tenant_id else None
 
 
-def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int) -> dict:
+def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int, external_source: str | None = None) -> dict:
     """Map one Former Tenants Excel row to a storentic.customer dict."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     return {
         "external_id":                  _derive_external_id(row),
+        "external_source":              external_source,
         "first_name":                   T.derive_full_name(row.get("FIRSTNAME"), row.get("MI")),
         "last_name":                    T.clean_str(row.get("LASTNAME")),
         "company_name":                 T.clean_str(row.get("COMPANY")),
@@ -236,14 +215,15 @@ def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int) -> 
 # ── Step 3: Idempotency — load already-imported FT-* ids ──────────────────────
 
 def load_existing_external_ids(engine) -> set[str]:
-    logger.info("Loading existing FT-* external_ids ...")
+    """Load all non-null external_ids from the customer table for dedup."""
+    logger.info("Loading existing external_ids from customer table ...")
     with engine.connect() as conn:
         rows = conn.execute(sa_text(
             "SELECT external_id FROM storentic.customer "
-            "WHERE external_id LIKE 'FT-%'"
+            "WHERE external_id IS NOT NULL"
         )).fetchall()
     ids = {r.external_id for r in rows}
-    logger.info(f"    Already imported: {len(ids)} former customers")
+    logger.info(f"    Already in DB: {len(ids)} customers with external_id")
     return ids
 
 
@@ -259,6 +239,7 @@ def process(
     existing_ids: set[str],
     engine,
     out_file: str,
+    external_source: str | None = None,
 ) -> dict:
 
     stats = {
@@ -274,7 +255,7 @@ def process(
         stats["total"] += 1
 
         try:
-            record = transform_row(row, org_id, loc_id, created_by)
+            record = transform_row(row, org_id, loc_id, created_by, external_source)
         except Exception as exc:
             log_error(row_idx + 2, row.get("LASTNAME", ""), "TRANSFORM", str(exc), None)
             stats["errors"] += 1
@@ -288,14 +269,15 @@ def process(
         ext_id       = record["external_id"]
         display_name = f"{record.get('first_name') or ''} {record.get('last_name') or ''}".strip()
 
-        if ext_id in existing_ids:
+        if ext_id is not None and ext_id in existing_ids:
             stats["skipped_dup"] += 1
             continue
 
         # Excel mode
         if output_mode == "excel":
             excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
-            existing_ids.add(ext_id)
+            if ext_id is not None:
+                existing_ids.add(ext_id)
             stats["inserted"] += 1
             continue
 
@@ -322,7 +304,8 @@ def process(
                     logger.debug(f"Inserted: {display_name} ({ext_id})")
                     stats["inserted"] += 1
 
-            existing_ids.add(ext_id)
+            if ext_id is not None:
+                existing_ids.add(ext_id)
 
         except Exception as exc:
             exc_str = str(exc)
@@ -400,11 +383,12 @@ def main(args=None):
     if args is None:
         args = parse_args()
 
-    output_mode = args.output
-    dry_run     = args.dry_run or os.getenv("DRY_RUN", "false").lower() == "true"
-    org_id      = int(os.getenv("ORGANIZATION_ID", 1))
-    loc_id      = int(os.getenv("LOCATION_ID", 1))
-    created_by  = int(os.getenv("CREATED_BY", 0))
+    output_mode     = args.output
+    dry_run         = args.dry_run or os.getenv("DRY_RUN", "false").lower() == "true"
+    org_id          = int(os.getenv("ORGANIZATION_ID", 1))
+    loc_id          = int(os.getenv("LOCATION_ID", 1))
+    created_by      = int(os.getenv("CREATED_BY", 0))
+    external_source = os.getenv("EXTERNAL_SOURCE") or None
 
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = args.out_file or os.path.join(OUTPUT_DIR, f"former_customers_{ts}.xlsx")
@@ -422,6 +406,7 @@ def main(args=None):
     logger.info(f"Output mode : {output_mode.upper()}")
     logger.info(f"Dry run     : {dry_run}")
     logger.info(f"Org/Loc/By  : {org_id}/{loc_id}/{created_by}")
+    logger.info(f"Ext source  : {external_source or '(none)'}")
     logger.info("=" * 65)
 
     # Step 1: Load + split + dedup
@@ -446,15 +431,16 @@ def main(args=None):
 
     # Step 4: Process
     stats = process(
-        df           = former_df,
-        org_id       = org_id,
-        loc_id       = loc_id,
-        created_by   = created_by,
-        output_mode  = output_mode,
-        dry_run      = dry_run,
-        existing_ids = existing_ids,
-        engine       = engine,
-        out_file     = out_file,
+        df              = former_df,
+        org_id          = org_id,
+        loc_id          = loc_id,
+        created_by      = created_by,
+        output_mode     = output_mode,
+        dry_run         = dry_run,
+        existing_ids    = existing_ids,
+        engine          = engine,
+        out_file        = out_file,
+        external_source = external_source,
     )
 
     # Step 5: Summary
@@ -466,7 +452,7 @@ def main(args=None):
         f"  Output mode    : {output_mode.upper()}",
         f"  Dry run        : {dry_run}",
         "=" * 65,
-        f"  Total rows (after dedup)   : {stats['total']:,}",
+        f"  Total rows processed       : {stats['total']:,}",
         f"  Inserted                   : {stats['inserted']:,}",
         f"  Updated (already existed)  : {stats['updated']:,}",
         f"  Skipped (already imported) : {stats['skipped_dup']:,}",

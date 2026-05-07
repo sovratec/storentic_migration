@@ -83,7 +83,7 @@ COL_LIC_REGION  = "sLicRegion"
 
 # ── Row transformer ────────────────────────────────────────────────────────────
 
-def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: int, created_by: int = 0) -> dict | None:
+def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: int, created_by: int = 0, external_source: str | None = None) -> dict | None:
     """
     Transform one Excel row into a dict ready for DB insertion.
     Returns None if the row must be skipped (critical field missing).
@@ -101,6 +101,7 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
 
     record = {
         "external_id":                  T.clean_str(get(COL_TENANT_ID)),
+        "external_source":              external_source,
         "first_name":                   T.derive_full_name(get(COL_FNAME), get(COL_MI)),
         "last_name":                    last_name,
         "company_name":                 T.clean_str(get(COL_COMPANY)),
@@ -159,7 +160,7 @@ def customer_exists(conn, external_id: str) -> bool:
 
 _INSERT_SQL = """
     INSERT INTO storentic.customer (
-        external_id,
+        external_id, external_source,
         first_name, last_name, company_name,
         address1, address2, city, state, zip, country, phone,
         alternate_first_name, alternate_last_name,
@@ -173,7 +174,7 @@ _INSERT_SQL = """
         customer_status_id,
         created_by, updated_by, created_datetime, updated_datetime
     ) VALUES (
-        :external_id,
+        :external_id, :external_source,
         :first_name, :last_name, :company_name,
         :address1, :address2, :city, :state, :zip, :country, :phone,
         :alternate_first_name, :alternate_last_name,
@@ -216,6 +217,7 @@ _UPDATE_SQL = """
         access_gate_code            = :access_gate_code,
         driver_license_id           = :driver_license_id,
         driver_license_issue_state  = :driver_license_issue_state,
+        external_source             = :external_source,
         location_id                 = :location_id,
         updated_by                  = :updated_by,
         updated_datetime            = :updated_datetime
@@ -283,6 +285,7 @@ def main(args=None):
     org_id          = int(os.getenv("ORGANIZATION_ID", 1))
     loc_id          = int(os.getenv("LOCATION_ID", 1))
     created_by      = int(os.getenv("CREATED_BY", 0))
+    external_source = os.getenv("EXTERNAL_SOURCE") or None
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = args.out_file or os.path.join(OUTPUT_DIR, f"customers_transformed_{ts}.xlsx")
@@ -327,7 +330,7 @@ def main(args=None):
     for row_idx, row in df.iterrows():
         stats["total"] += 1
 
-        record = transform_row(row_idx, row, col_map, org_id, loc_id, created_by)
+        record = transform_row(row_idx, row, col_map, org_id, loc_id, created_by, external_source)
 
         if record is None:
             stats["errors"] += 1
