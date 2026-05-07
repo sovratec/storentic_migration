@@ -263,13 +263,22 @@ def load_existing_external_ids(engine) -> set:
 # =============================================================================
 
 def _parse_dt(val):
-    """Parse a datetime value from pandas, return None if null/unparseable."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    """Parse a datetime value from pandas, return None if null/NaT/unparseable."""
+    if val is None:
         return None
+    # pd.isna handles NaN, NaT, and None; guard with try for non-scalar types
+    try:
+        if pd.isna(val):
+            return None
+    except (TypeError, ValueError):
+        pass
     if isinstance(val, pd.Timestamp):
         return val.to_pydatetime()
     try:
-        return pd.to_datetime(val).to_pydatetime()
+        ts = pd.to_datetime(val)
+        if pd.isna(ts):
+            return None
+        return ts.to_pydatetime()
     except Exception:
         return None
 
