@@ -13,10 +13,15 @@ from datetime import datetime
 LOGS_DIR = os.path.join(os.path.dirname(__file__), "..", "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-RUN_TS = datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_FILE = os.path.join(LOGS_DIR, f"migration_{RUN_TS}.log")
-ERROR_CSV = os.path.join(LOGS_DIR, f"errors_{RUN_TS}.csv")
-SUMMARY_FILE = os.path.join(LOGS_DIR, f"summary_{RUN_TS}.txt")
+# Derive script name from the entry-point so every script gets its own files.
+# e.g.  migrate_customers.py  →  "migrate_customers"
+_script_name = os.path.splitext(os.path.basename(sys.argv[0]))[0] or "migration"
+
+RUN_TS        = datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE      = os.path.join(LOGS_DIR, f"migration_{_script_name}_{RUN_TS}.log")
+ERROR_CSV     = os.path.join(LOGS_DIR, f"errors_{_script_name}_{RUN_TS}.csv")
+SKIPPED_CSV   = os.path.join(LOGS_DIR, f"skipped_{_script_name}_{RUN_TS}.csv")
+SUMMARY_FILE  = os.path.join(LOGS_DIR, f"summary_{_script_name}_{RUN_TS}.txt")
 
 # ── Logger ─────────────────────────────────────────────────────────────────────
 sys.stdout.reconfigure(encoding="utf-8")
@@ -51,19 +56,40 @@ _error_writer.writeheader()
 
 
 def log_error(row_number: int, unit_name, field: str, error: str, original_value=None):
-    """Log a row-level error to both the main log and the errors CSV."""
+    """Log an unexpected row-level error to the main log and errors CSV."""
     logger.warning(f"Row {row_number} | unit={unit_name} | field={field} | {error} | value={original_value!r}")
-    _error_writer.writerow(
-        {
-            "timestamp": datetime.now().isoformat(),
-            "row_number": row_number,
-            "unit_name": unit_name,
-            "field": field,
-            "error": error,
-            "original_value": original_value,
-        }
-    )
+    _error_writer.writerow({
+        "timestamp":      datetime.now().isoformat(),
+        "row_number":     row_number,
+        "unit_name":      unit_name,
+        "field":          field,
+        "error":          error,
+        "original_value": original_value,
+    })
     _error_file.flush()
+
+
+# ── Skipped CSV writer ─────────────────────────────────────────────────────────
+_skipped_file   = open(SKIPPED_CSV, "w", newline="", encoding="utf-8")
+_skipped_writer = csv.DictWriter(
+    _skipped_file,
+    fieldnames=["timestamp", "row_number", "record_id", "field", "skip_reason", "extra_info"],
+)
+_skipped_writer.writeheader()
+
+
+def log_skipped(row_number: int, record_id, field: str, reason: str, extra_info=None):
+    """Log an intentionally skipped record (FK not found, required field missing, etc.)."""
+    logger.warning(f"SKIPPED Row {row_number} | id={record_id} | field={field} | {reason} | extra={extra_info!r}")
+    _skipped_writer.writerow({
+        "timestamp":   datetime.now().isoformat(),
+        "row_number":  row_number,
+        "record_id":   record_id,
+        "field":       field,
+        "skip_reason": reason,
+        "extra_info":  extra_info,
+    })
+    _skipped_file.flush()
 
 
 def write_summary(stats: dict):
@@ -86,9 +112,10 @@ def write_summary(stats: dict):
     if stats.get("excel_output"):
         lines.append(f"  Excel output : {stats['excel_output']}")
     lines += [
-        f"  Log file   : {LOG_FILE}",
-        f"  Error CSV  : {ERROR_CSV}",
-        f"  Summary    : {SUMMARY_FILE}",
+        f"  Log file     : {LOG_FILE}",
+        f"  Error CSV    : {ERROR_CSV}",
+        f"  Skipped CSV  : {SKIPPED_CSV}",
+        f"  Summary      : {SUMMARY_FILE}",
         "=" * 60,
     ]
     text = "\n".join(lines)
@@ -100,3 +127,4 @@ def write_summary(stats: dict):
 
 def close():
     _error_file.close()
+    _skipped_file.close()
