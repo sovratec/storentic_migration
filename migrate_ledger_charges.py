@@ -74,7 +74,7 @@ from psycopg2.extras import execute_values
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, close as close_logger
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -475,6 +475,7 @@ def process_charges(
                 "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
                 "skip_reason": reason,
             })
+            log_skipped(excel_row, charge_id, "ChargeDescID", reason, charge_desc_id)
             stats["skipped_no_ct"] += 1
             continue
 
@@ -489,6 +490,7 @@ def process_charges(
                 "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
                 "skip_reason": reason,
             })
+            log_skipped(excel_row, charge_id, "LedgerID", reason, ledger_id)
             stats["skipped_no_cust"] += 1
             continue
 

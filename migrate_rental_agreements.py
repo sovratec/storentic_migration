@@ -60,7 +60,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, write_summary, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts.validator import validate
 from scripts import rental_agreement_transformer as T
 
@@ -157,40 +157,40 @@ def transform_row(
     tenant_id = str(get(COL_TENANT_ID) or "").strip()
     customer_id = customer_map.get(tenant_id)
     if not customer_id:
-        log_error(excel_row, tenant_id, COL_TENANT_ID,
-                  f"customer_id not found for TenantId={tenant_id!r}", tenant_id)
+        log_skipped(excel_row, tenant_id, COL_TENANT_ID,
+                    f"customer_id not found for TenantId={tenant_id!r}", tenant_id)
         return None
 
     # ── FK: unit_id ───────────────────────────────────────────────────────────
     unit_name = str(get(COL_UNIT_NAME) or "").strip()
     unit_id = unit_map.get(unit_name)
     if not unit_id:
-        log_error(excel_row, unit_name, COL_UNIT_NAME,
-                  f"unit_id not found for sUnitName={unit_name!r}", unit_name)
+        log_skipped(excel_row, unit_name, COL_UNIT_NAME,
+                    f"unit_id not found for sUnitName={unit_name!r}", unit_name)
         return None
 
     # ── dMovedIn (required — drives move_in_date and charge_day) ─────────────
     move_in_date = T.parse_date(get(COL_MOVED_IN))
     if move_in_date is None:
-        log_error(excel_row, unit_name, COL_MOVED_IN,
-                  "dMovedIn is null or unparseable — move_in_date is required",
-                  get(COL_MOVED_IN))
+        log_skipped(excel_row, unit_name, COL_MOVED_IN,
+                    "dMovedIn is null or unparseable — move_in_date is required",
+                    get(COL_MOVED_IN))
         return None
 
     # ── dPaidThru (required) ──────────────────────────────────────────────────
     paid_through_date = T.parse_date(get(COL_PAID_THRU))
     if paid_through_date is None:
-        log_error(excel_row, unit_name, COL_PAID_THRU,
-                  "dPaidThru is null or unparseable — paid_through_date is required",
-                  get(COL_PAID_THRU))
+        log_skipped(excel_row, unit_name, COL_PAID_THRU,
+                    "dPaidThru is null or unparseable — paid_through_date is required",
+                    get(COL_PAID_THRU))
         return None
 
     # ── dcRent (required) ─────────────────────────────────────────────────────
     rent_raw = get(COL_RENT)
     if rent_raw is None or str(rent_raw).strip().lower() in ("nan", "none", ""):
-        log_error(excel_row, unit_name, COL_RENT,
-                  "dcRent is null or non-numeric — rental_rate_in_cents is required",
-                  rent_raw)
+        log_skipped(excel_row, unit_name, COL_RENT,
+                    "dcRent is null or non-numeric — rental_rate_in_cents is required",
+                    rent_raw)
         return None
     rental_rate_in_cents = T.to_cents(rent_raw)
 

@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 load_dotenv()
 
-from scripts.logger import logger, log_error, write_summary, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts.validator import validate
 from scripts import transformer as T
 

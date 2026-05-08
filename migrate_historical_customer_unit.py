@@ -55,7 +55,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, close as close_logger
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -197,37 +197,37 @@ def transform_row(excel_row: int, row: pd.Series,
     tenant_id   = str(row.get("TenantID") or "").strip().split(".")[0]
     customer_id = customer_map.get(tenant_id)
     if not customer_id:
-        log_error(excel_row, tenant_id, "TenantID",
-                  f"customer not found for TenantID={tenant_id!r}", tenant_id)
+        log_skipped(excel_row, tenant_id, "TenantID",
+                    f"customer not found for TenantID={tenant_id!r}", tenant_id)
         return None
 
     # ── unit_id ───────────────────────────────────────────────────────────────
     unit_name = str(row.get("sUnitName") or "").strip()
     unit_id   = unit_map.get(unit_name)
     if not unit_id:
-        log_error(excel_row, unit_name, "sUnitName",
-                  f"unit not found for sUnitName={unit_name!r}", unit_name)
+        log_skipped(excel_row, unit_name, "sUnitName",
+                    f"unit not found for sUnitName={unit_name!r}", unit_name)
         return None
 
     # ── dMovedIn (required — drives lease_date fallback and charge_day) ───────
     move_in_date = _parse_date(row.get("dMovedIn"))
     if move_in_date is None:
-        log_error(excel_row, unit_name, "dMovedIn",
-                  "dMovedIn is null — charge_day cannot be derived", row.get("dMovedIn"))
+        log_skipped(excel_row, unit_name, "dMovedIn",
+                    "dMovedIn is null — charge_day cannot be derived", row.get("dMovedIn"))
         return None
 
     # ── dMovedOut (required for historical rows — filter guarantees it) ───────
     move_out_date = _parse_date(row.get("dMovedOut"))
     if move_out_date is None:
-        log_error(excel_row, unit_name, "dMovedOut",
-                  "dMovedOut is null — row should have been filtered out", row.get("dMovedOut"))
+        log_skipped(excel_row, unit_name, "dMovedOut",
+                    "dMovedOut is null — row should have been filtered out", row.get("dMovedOut"))
         return None
 
     # ── dcRent (required) ─────────────────────────────────────────────────────
     rent_raw = row.get("dcRent")
     if rent_raw is None or str(rent_raw).strip().lower() in ("nan", "none", ""):
-        log_error(excel_row, unit_name, "dcRent",
-                  "dcRent is null — rental_rate is required", rent_raw)
+        log_skipped(excel_row, unit_name, "dcRent",
+                    "dcRent is null — rental_rate is required", rent_raw)
         return None
     rental_rate = _safe_decimal(rent_raw)
 

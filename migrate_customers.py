@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, write_summary, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts.validator import validate
 from scripts import customer_transformer as T
 
@@ -96,11 +96,11 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
     external_id = T.clean_str(get(COL_TENANT_ID))
 
     if not external_id:
-        log_error(row_idx + 2, "UNKNOWN", COL_TENANT_ID, "TenantId is blank — row rejected", None)
+        log_skipped(row_idx + 2, "UNKNOWN", COL_TENANT_ID, "TenantId is blank — row rejected", None)
         return None
 
     if not last_name:
-        log_error(row_idx + 2, "UNKNOWN", COL_LNAME, "sLname is blank — row rejected", None)
+        log_skipped(row_idx + 2, "UNKNOWN", COL_LNAME, "sLname is blank — row rejected", None)
         return None
 
     record = {

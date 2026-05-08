@@ -61,7 +61,7 @@ from sqlalchemy import text as sa_text
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, close as close_logger
 from scripts import payment_transformer as PT
 
 # ── Output directory ───────────────────────────────────────────────────────────
@@ -384,7 +384,8 @@ def process_payments(
 
         customer_id = ledger_to_customer.get(ledger_id)
         if customer_id is None:
-            logger.debug(f"    Row {row_idx + 2}: LedgerID {ledger_id} has no matching customer — skipped")
+            log_skipped(row_idx + 2, row.get("PaymentID"), "LedgerID",
+                        f"LedgerID {ledger_id} has no matching customer", ledger_id)
             stats["skipped_no_cust"] += 1
             continue
 

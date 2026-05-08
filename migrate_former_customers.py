@@ -54,7 +54,7 @@ from sqlalchemy import text as sa_text
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
-from scripts.logger import logger, log_error, write_summary, close as close_logger
+from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts import customer_transformer as T
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -264,7 +264,7 @@ def process(
             continue
 
         if not record.get("last_name"):
-            log_error(row_idx + 2, "UNKNOWN", "LASTNAME", "last_name is blank — skipped", None)
+            log_skipped(row_idx + 2, "UNKNOWN", "LASTNAME", "last_name is blank — skipped", None)
             stats["errors"] += 1
             continue
 
@@ -272,8 +272,8 @@ def process(
         display_name = f"{record.get('first_name') or ''} {record.get('last_name') or ''}".strip()
 
         if ext_id is None:
-            log_error(row_idx + 2, display_name, "MISSING_TENANT_ID",
-                      "TenantId is blank — cannot deduplicate, row skipped", None)
+            log_skipped(row_idx + 2, display_name, "MISSING_TENANT_ID",
+                        "TenantId is blank — cannot deduplicate, row skipped", None)
             stats["errors"] += 1
             continue
 
