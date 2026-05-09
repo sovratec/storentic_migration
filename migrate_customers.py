@@ -152,7 +152,7 @@ def customer_exists(conn, external_id: str) -> bool:
     result = conn.execute(
         sa_text(
             "SELECT id FROM storentic.customer "
-            "WHERE external_id = :external_id "
+            "WHERE external_id = :external_id AND deleted_at IS NULL "
             "LIMIT 1"
         ),
         {"external_id": external_id},
