@@ -230,6 +230,7 @@ def transform_row(
     # ── Transform fields ──────────────────────────────────────────────────────
     return {
         "external_id"            : derive_external_id(payment_id),
+        "external_payment_id"    : derive_external_id(payment_id),
         "receipt_number"         : derive_receipt_number(payment_id),
         "customer_id"            : customer_id,
         "location_id"            : loc_id,

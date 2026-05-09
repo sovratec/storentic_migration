@@ -4,29 +4,33 @@ migrate_ledger_charges.py — ETL script: SiteLink Select Charges → storentic.
 Usage:
     # Dry run (preview row counts, no DB writes)
     python migrate_ledger_charges.py \\
-        --file-charges  "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
         --file-charge-types data/ChargeType.xlsx \\
+        --file-charge-desc  data/ChargeDesc.xlsx \\
         --output db --dry-run
 
     # Export to Excel for review before DB import
     python migrate_ledger_charges.py \\
-        --file-charges  "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
         --file-charge-types data/ChargeType.xlsx \\
+        --file-charge-desc  data/ChargeDesc.xlsx \\
         --output excel
 
     # Production import
     python migrate_ledger_charges.py \\
-        --file-charges  "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
         --file-charge-types data/ChargeType.xlsx \\
+        --file-charge-desc  data/ChargeDesc.xlsx \\
         --output db
 
 Arguments:
     --file-charges      Path to SiteLink Select Charges Excel file (required)
     --file-tenants      Path to Tenants+Units+Ledgers+Access Excel file (required)
     --file-charge-types Path to ChargeType.xlsx mapping file (required)
+    --file-charge-desc  Path to ChargeDesc.xlsx — provides sChgDesc for memo column (required)
     --output            'db' (default) or 'excel'
     --out-file          [excel mode] Output Excel file path
     --dry-run           [db mode] Preview without writing to DB
@@ -143,6 +147,36 @@ def load_charge_type_map(charge_types_file: str) -> dict:
             continue
 
     logger.info(f"    ChargeDescID mappings loaded: {len(mapping)}")
+    return mapping
+
+
+def load_charge_desc_map(charge_desc_file: str) -> dict:
+    """
+    Read ChargeDesc.xlsx and return {ChargeDescID (int): sChgDesc (str)}.
+    Used to populate the memo column in ledger_charges.
+    """
+    logger.info(f"📂  Loading charge description mapping: {charge_desc_file}")
+    df = pd.read_excel(charge_desc_file)
+    df.columns = df.columns.str.strip()
+
+    if "ChargeDescID" not in df.columns or "sChgDesc" not in df.columns:
+        raise SystemExit(
+            f"❌  ChargeDesc file must contain 'ChargeDescID' and 'sChgDesc' columns.\n"
+            f"    Found: {list(df.columns[:20])}"
+        )
+
+    mapping = {}
+    for _, row in df.iterrows():
+        if pd.isna(row.get("ChargeDescID")):
+            continue
+        try:
+            desc_id = int(float(row["ChargeDescID"]))
+            memo    = str(row["sChgDesc"]).strip() if pd.notna(row.get("sChgDesc")) else None
+            mapping[desc_id] = memo
+        except (ValueError, TypeError):
+            continue
+
+    logger.info(f"    ChargeDesc memo mappings loaded: {len(mapping)}")
     return mapping
 
 
@@ -306,7 +340,7 @@ def _to_cents(val) -> int:
 
 
 def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int,
-                  loc_id: int, org_id: int, created_by: int) -> dict:
+                  loc_id: int, org_id: int, created_by: int, memo: str = None) -> dict:
     """Transform one Select Charges row into a ledger_charges insert dict."""
 
     charge_id   = str(int(float(row["ChargeID"])))
@@ -341,7 +375,7 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
         "charge_type_id":     charge_type_id,
         "amount_in_cents":    _to_cents(dc_amt),
         "effective_date":     d_chg_strt or d_created or now,
-        "memo":               "Migrated from SiteLink",
+        "memo":               memo,
         "internal_note":      None,
         "status":             status,
         "invoice_id":         None,
@@ -367,6 +401,7 @@ def _record_to_tuple(record: dict) -> tuple:
 def process_charges(
     charges_file: str,
     charge_type_map: dict,
+    charge_desc_map: dict,
     ledger_to_tenant: dict,
     ledger_to_unitname: dict,
     customer_map: dict,
@@ -499,9 +534,10 @@ def process_charges(
         unit_id   = unit_map.get(unit_name) if unit_name else None
 
         # ── Transform ─────────────────────────────────────────────────────────
+        memo = charge_desc_map.get(charge_desc_id)
         try:
             record = transform_row(row, customer_id, unit_id, charge_type_id,
-                                   loc_id, org_id, created_by)
+                                   loc_id, org_id, created_by, memo=memo)
         except Exception as exc:
             log_error(excel_row, charge_id, "TRANSFORM", str(exc), charge_id)
             stats["errors"] += 1
@@ -620,6 +656,8 @@ def parse_args(args=None):
                         help="Path to Tenants+Units+Ledgers+Access Excel file")
     parser.add_argument("--file-charge-types", required=True,
                         help="Path to ChargeType.xlsx mapping file")
+    parser.add_argument("--file-charge-desc", required=True,
+                        help="Path to ChargeDesc.xlsx — provides sChgDesc for memo column")
     parser.add_argument("--output",   default="db", choices=["db", "excel"],
                         help="Output destination: 'db' (default) or 'excel'")
     parser.add_argument("--out-file", default=None,
@@ -655,6 +693,7 @@ def main(args=None):
     logger.info(f"Charges file      : {args.file_charges}")
     logger.info(f"Tenants file      : {args.file_tenants}")
     logger.info(f"Charge types file : {args.file_charge_types}")
+    logger.info(f"Charge desc file  : {args.file_charge_desc}")
     logger.info(f"Output mode       : {output_mode.upper()}")
     logger.info(f"Dry run           : {dry_run}")
     logger.info(f"Org / Loc / CreatedBy : {org_id} / {loc_id} / {created_by}")
@@ -675,6 +714,7 @@ def main(args=None):
 
     # ── Load source file maps ─────────────────────────────────────────────────
     charge_type_map                    = load_charge_type_map(args.file_charge_types)
+    charge_desc_map                    = load_charge_desc_map(args.file_charge_desc)
     ledger_to_tenant, ledger_to_unit   = load_tenants_maps(args.file_tenants)
 
     # ── Load DB lookup maps ───────────────────────────────────────────────────
@@ -686,6 +726,7 @@ def main(args=None):
     stats = process_charges(
         charges_file        = args.file_charges,
         charge_type_map     = charge_type_map,
+        charge_desc_map     = charge_desc_map,
         ledger_to_tenant    = ledger_to_tenant,
         ledger_to_unitname  = ledger_to_unit,
         customer_map        = customer_map,

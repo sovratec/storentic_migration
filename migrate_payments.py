@@ -72,6 +72,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 _INSERT_SQL = """
     INSERT INTO storentic.payments (
         external_id,
+        external_payment_id,
         receipt_number,
         customer_id,
         location_id,
@@ -97,6 +98,7 @@ _INSERT_SQL = """
         reversed_at
     ) VALUES (
         :external_id,
+        :external_payment_id,
         :receipt_number,
         :customer_id,
         :location_id,
@@ -125,7 +127,7 @@ _INSERT_SQL = """
 
 # Excel output columns (in display order, audit fields last)
 EXCEL_OUTPUT_COLUMNS = [
-    "external_id", "receipt_number", "customer_id", "location_id",
+    "external_id", "external_payment_id", "receipt_number", "customer_id", "location_id",
     "organization_id", "amount_in_cents", "payment_method_type_id",
     "status", "payment_date", "failure_reason",
     "reference_number", "notes", "created_by", "created_at",
@@ -253,15 +255,31 @@ def load_existing_external_ids(engine) -> set[str]:
     if not col_exists:
         raise SystemExit(
             "\n❌  Column 'external_id' does not exist on storentic.payments.\n\n"
-            "    The V5 SQL migration has not been applied yet. Run it first:\n\n"
+            "    Run the V5 SQL migration first:\n\n"
             "      psql -h <DB_HOST> -U <DB_USER> -d storentic \\\n"
-            "           -f sql/V5__payments_sitelink_migration_columns.sql\n\n"
-            "    Or paste this into your DB client (DBeaver / pgAdmin):\n\n"
+            "           -f sql/V5__payments_sitelink_migration_columns.sql\n"
+        )
+
+    with engine.connect() as conn:
+        ext_pmt_col_exists = conn.execute(sa_text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'storentic' "
+            "  AND table_name   = 'payments' "
+            "  AND column_name  = 'external_payment_id'"
+        )).fetchone()
+
+    if not ext_pmt_col_exists:
+        raise SystemExit(
+            "\n❌  Column 'external_payment_id' does not exist on storentic.payments.\n\n"
+            "    Run the V10 SQL migration first:\n\n"
+            "      psql -h <DB_HOST> -U <DB_USER> -d storentic \\\n"
+            "           -f sql/V10__payments_external_payment_id.sql\n\n"
+            "    Or paste this into your DB client:\n\n"
             "      ALTER TABLE storentic.payments\n"
-            "          ADD COLUMN IF NOT EXISTS external_id VARCHAR(100);\n\n"
-            "      CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_external_id\n"
-            "          ON storentic.payments(external_id)\n"
-            "          WHERE external_id IS NOT NULL;\n"
+            "          ADD COLUMN IF NOT EXISTS external_payment_id VARCHAR(100);\n\n"
+            "      CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_external_payment_id\n"
+            "          ON storentic.payments(external_payment_id)\n"
+            "          WHERE external_payment_id IS NOT NULL;\n"
         )
 
     with engine.connect() as conn:
