@@ -222,7 +222,7 @@ def load_existing_external_ids(engine) -> set[str]:
     with engine.connect() as conn:
         rows = conn.execute(sa_text(
             "SELECT external_id FROM storentic.customer "
-            "WHERE external_id IS NOT NULL AND deleted_at IS NULL"
+            "WHERE external_id IS NOT NULL"
         )).fetchall()
     ids = {r.external_id for r in rows}
     logger.info(f"    Already in DB: {len(ids)} customers with external_id")
