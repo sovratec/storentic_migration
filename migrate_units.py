@@ -3,17 +3,17 @@ migrate_units.py — Main ETL script for loading legacy Unit data.
 
 Usage:
     # Insert transformed records into PostgreSQL (default)
-    python migrate_units.py --file data/Units.xlsx --output db
+    python migrate_units.py --file data/Units.csv --output db
 
     # Write transformed records to an Excel file instead of the DB
-    python migrate_units.py --file data/Units.xlsx --output excel
+    python migrate_units.py --file data/Units.csv --output excel
 
     # DB mode with additional flags
-    python migrate_units.py --file data/Units.xlsx --output db --dry-run
-    python migrate_units.py --file data/Units.xlsx --output db --update
+    python migrate_units.py --file data/Units.csv --output db --dry-run
+    python migrate_units.py --file data/Units.csv --output db --update
 
 Arguments:
-    --file      Path to the source Excel file (required)
+    --file      Path to the source CSV file (required)
     --output    Destination: 'db' (default) or 'excel'
     --dry-run   [db mode only] Preview without writing to DB
     --update    [db mode only] Update existing records instead of skipping duplicates
@@ -345,7 +345,7 @@ def write_to_excel(records: list[dict], out_path: str):
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser(description="Storentic Units ETL Migration")
-    parser.add_argument("--file",     required=True,  help="Path to source Excel file")
+    parser.add_argument("--file",     required=True,  help="Path to source CSV file")
     parser.add_argument("--output",   default="db",   choices=["db", "excel"],
                         help="Output destination: 'db' (default) or 'excel'")
     parser.add_argument("--out-file", default=None,   help="[excel mode] Output file path")

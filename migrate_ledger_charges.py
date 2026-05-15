@@ -4,33 +4,33 @@ migrate_ledger_charges.py — ETL script: SiteLink Select Charges → storentic.
 Usage:
     # Dry run (preview row counts, no DB writes)
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
-        --file-charge-types data/ChargeType.xlsx \\
-        --file-charge-desc  data/ChargeDesc.xlsx \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
+        --file-charge-types data/ChargeType.csv \\
+        --file-charge-desc  data/ChargeDesc.csv \\
         --output db --dry-run
 
     # Export to Excel for review before DB import
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
-        --file-charge-types data/ChargeType.xlsx \\
-        --file-charge-desc  data/ChargeDesc.xlsx \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
+        --file-charge-types data/ChargeType.csv \\
+        --file-charge-desc  data/ChargeDesc.csv \\
         --output excel
 
     # Production import
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.xlsx" \\
-        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
-        --file-charge-types data/ChargeType.xlsx \\
-        --file-charge-desc  data/ChargeDesc.xlsx \\
+        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
+        --file-charge-types data/ChargeType.csv \\
+        --file-charge-desc  data/ChargeDesc.csv \\
         --output db
 
 Arguments:
-    --file-charges      Path to SiteLink Select Charges Excel file (required)
-    --file-tenants      Path to Tenants+Units+Ledgers+Access Excel file (required)
-    --file-charge-types Path to ChargeType.xlsx mapping file (required)
-    --file-charge-desc  Path to ChargeDesc.xlsx — provides sChgDesc for memo column (required)
+    --file-charges      Path to SiteLink Select Charges CSV file (required)
+    --file-tenants      Path to Tenants+Units+Ledgers+Access CSV file (required)
+    --file-charge-types Path to ChargeType.csv mapping file (required)
+    --file-charge-desc  Path to ChargeDesc.csv — provides sChgDesc for memo column (required)
     --output            'db' (default) or 'excel'
     --out-file          [excel mode] Output Excel file path
     --dry-run           [db mode] Preview without writing to DB
@@ -54,7 +54,7 @@ Join chain (how SiteLink charges map to Storentic records):
        TenantID  ──────────────────► storentic.customer (external_id) → customer_id
        sUnitName ──────────────────► storentic.units (unit_number)    → unit_id
            |
-    ChargeDescID ──────────────────► ChargeType.xlsx                  → charge_type_id
+    ChargeDescID ──────────────────► ChargeType.csv                   → charge_type_id
 
 Status logic:
     bNSF = True OR dDeleted not null  →  REVERSED
@@ -62,7 +62,7 @@ Status logic:
 
 Skipped rows (written to output/ledger_charges_skipped_<ts>.xlsx):
     - LedgerID not found in Tenants file / no matching customer
-    - ChargeDescID not in ChargeType.xlsx mapping
+    - ChargeDescID not in ChargeType.csv mapping
 """
 
 import argparse
@@ -129,11 +129,12 @@ SKIPPED_COLUMNS = [
 
 def load_charge_type_map(charge_types_file: str) -> dict:
     """
-    Read ChargeType.xlsx and return {ChargeDescID (int): charge_type_id (int)}.
+    Read ChargeType.csv and return {ChargeDescID (int): charge_type_id (int)}.
     Rows with no id or no ChargeDescID are ignored (summary/total rows).
     """
     logger.info(f"📂  Loading charge type mapping: {charge_types_file}")
-    df = pd.read_excel(charge_types_file)
+    df = pd.read_csv(charge_types_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
     mapping = {}
     for _, row in df.iterrows():
@@ -152,11 +153,12 @@ def load_charge_type_map(charge_types_file: str) -> dict:
 
 def load_charge_desc_map(charge_desc_file: str) -> dict:
     """
-    Read ChargeDesc.xlsx and return {ChargeDescID (int): sChgDesc (str)}.
+    Read ChargeDesc.csv and return {ChargeDescID (int): sChgDesc (str)}.
     Used to populate the memo column in ledger_charges.
     """
     logger.info(f"📂  Loading charge description mapping: {charge_desc_file}")
-    df = pd.read_excel(charge_desc_file)
+    df = pd.read_csv(charge_desc_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
 
     if "ChargeDescID" not in df.columns or "sChgDesc" not in df.columns:
@@ -187,7 +189,8 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
         ledger_to_unitname : {LedgerID (int): sUnitName (str)}
     """
     logger.info(f"📂  Loading tenants file: {tenants_file}")
-    df = pd.read_excel(tenants_file, dtype=str)
+    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
 
     required = {"LedgerID", "TenantID", "sUnitName"}
@@ -417,14 +420,12 @@ def process_charges(
     batch_size: int,
 ) -> dict:
 
-    # ── Read source Excel ──────────────────────────────────────────────────────
+    # ── Read source CSV ────────────────────────────────────────────────────────
     logger.info(f"📂  Loading charges file: {charges_file}")
-    df = pd.read_excel(charges_file, engine="openpyxl",
-                       dtype={"ChargeID": "float64", "ChargeDescID": "float64",
-                              "LedgerID": "float64", "dcAmt": "float64",
-                              "bNSF": "bool", "bMoveIn": "bool", "bMoveOut": "bool"})
+    df = pd.read_csv(charges_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
-    df = df[df["ChargeID"].notna()].copy()
+    df = df[df["ChargeID"].notna() & (df["ChargeID"].str.strip() != "")].copy()
     logger.info(f"    Charge rows to process: {len(df):,}")
     print(f"\n  Processing {len(df):,} rows — batch size {batch_size:,}\n", flush=True)
 
@@ -651,13 +652,13 @@ def parse_args(args=None):
         description="SiteLink Select Charges → Storentic Ledger Charges Migration"
     )
     parser.add_argument("--file-charges",      required=True,
-                        help="Path to SiteLink Select Charges Excel file")
+                        help="Path to SiteLink Select Charges CSV file")
     parser.add_argument("--file-tenants",      required=True,
-                        help="Path to Tenants+Units+Ledgers+Access Excel file")
+                        help="Path to Tenants+Units+Ledgers+Access CSV file")
     parser.add_argument("--file-charge-types", required=True,
-                        help="Path to ChargeType.xlsx mapping file")
+                        help="Path to ChargeType.csv mapping file")
     parser.add_argument("--file-charge-desc", required=True,
-                        help="Path to ChargeDesc.xlsx — provides sChgDesc for memo column")
+                        help="Path to ChargeDesc.csv — provides sChgDesc for memo column")
     parser.add_argument("--output",   default="db", choices=["db", "excel"],
                         help="Output destination: 'db' (default) or 'excel'")
     parser.add_argument("--out-file", default=None,

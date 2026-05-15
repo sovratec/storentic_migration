@@ -135,7 +135,8 @@ def validate(filepath: str, mode: str = "unit") -> tuple[pd.DataFrame, dict]:
 
     logger.info(f"📂  Loading source file: {filepath}")
     logger.info(f"    Migration mode : {mode.upper()}")
-    df = pd.read_excel(filepath, dtype=str)
+    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
     # Strip whitespace from all string values
     df = df.apply(lambda col: col.str.strip() if col.dtype == "object" else col)

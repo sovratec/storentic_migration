@@ -5,24 +5,24 @@ Usage:
     # Dry run (preview row counts, no DB writes)
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
-        --file-tenants  "data/Tenants+Units+Ledgers+Access.xlsx" \\
+        --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
         --output db --dry-run
 
     # Export to Excel for review before DB import
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
-        --file-tenants  "data/Tenants+Units+Ledgers+Access.xlsx" \\
+        --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
         --output excel
 
     # Production import
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
-        --file-tenants  "data/Tenants+Units+Ledgers+Access.xlsx" \\
+        --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
         --output db
 
 Arguments:
     --file-payments   Path to Payments.csv from SiteLink (required)
-    --file-tenants    Path to Tenants+Units+Ledgers+Access.xlsx (required)
+    --file-tenants    Path to Tenants+Units+Ledgers+Access.csv (required)
     --output          'db' (default) or 'excel'
     --dry-run         [db mode] Preview without writing to DB
     --out-file        [excel mode] Output Excel file path
@@ -42,7 +42,7 @@ Pre-requisite:
 Join chain (how SiteLink payments map to Storentic customers):
     Payments.csv       LedgerID
         |
-        v  (via Tenants+Units+Ledgers+Access.xlsx)
+        v  (via Tenants+Units+Ledgers+Access.csv)
     TenantID
         |
         v  (via storentic.customer WHERE external_id = TenantID)
@@ -140,14 +140,15 @@ EXCEL_OUTPUT_COLUMNS = [
 
 def build_ledger_to_tenant_map(tenants_file: str) -> dict[int, int]:
     """
-    Read Tenants+Units+Ledgers+Access.xlsx and return {LedgerID: TenantID}.
+    Read Tenants CSV and return {LedgerID: TenantID}.
 
     One tenant can have multiple ledgers (multiple units). Each row in the
-    Excel file represents one ledger. We build the inverse map here so that
+    CSV file represents one ledger. We build the inverse map here so that
     for every LedgerID we know which TenantID it belongs to.
     """
     logger.info(f"📂  Loading tenants file: {tenants_file}")
-    df = pd.read_excel(tenants_file, dtype=str)
+    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
 
     if "LedgerID" not in df.columns or "TenantID" not in df.columns:
@@ -553,7 +554,7 @@ def parse_args(args=None):
     )
     parser.add_argument(
         "--file-tenants", required=True,
-        help="Path to Tenants+Units+Ledgers+Access.xlsx (SiteLink export)",
+        help="Path to Tenants+Units+Ledgers+Access.csv (SiteLink export)",
     )
     parser.add_argument(
         "--output", default="db", choices=["db", "excel"],

@@ -1,17 +1,17 @@
 """
 migrate_historical_rental_agreements.py — ETL: historical rental_agreements from SiteLink.
 
-Source : Tenants+Units+Ledgers+Access Excel file (SiteLink export)
+Source : Tenants+Units+Ledgers+Access CSV file (SiteLink export)
 Filter : Only rows where dMovedOut IS NOT NULL (completed tenancies)
 Target : storentic.rental_agreements  (status = TERMINATED)
 
 Usage:
-    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.xlsx" --output db
-    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.xlsx" --output db --dry-run
-    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.xlsx" --output excel
+    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db
+    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db --dry-run
+    python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output excel
 
 Arguments:
-    --file      Path to Tenants+Units+Ledgers+Access Excel file (required)
+    --file      Path to Tenants+Units+Ledgers+Access CSV file (required)
     --output    Destination: 'db' (default) or 'excel'
     --out-file  [excel mode only] Output Excel filename
     --dry-run   [db mode only] Preview without writing to DB
@@ -369,7 +369,8 @@ def main(args=None):
 
     # ── Load and filter source file ───────────────────────────────────────────
     logger.info(f"📂  Loading source file: {args.file}")
-    df_raw = pd.read_excel(args.file)
+    df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
+    df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
     df_raw.columns = df_raw.columns.str.strip()
 
     missing = REQUIRED_COLS - set(df_raw.columns)

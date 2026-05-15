@@ -48,14 +48,14 @@ Usage
 -----
     # Dry run — counts only, no DB writes
     python migrate_invoices.py \\
-        --file-invoices "data/Invoices.xlsx" \\
-        --file-payments "data/Payments_csv.csv" \\
+        --file-invoices "data/Invoices.csv" \\
+        --file-payments "data/Payments.csv" \\
         --dry-run
 
     # Live import
     python migrate_invoices.py \\
-        --file-invoices "data/Invoices.xlsx" \\
-        --file-payments "data/Payments_csv.csv"
+        --file-invoices "data/Invoices.csv" \\
+        --file-payments "data/Payments.csv"
 
 Environment (.env)
 ------------------
@@ -186,11 +186,11 @@ def load_existing_invoice_ids(engine) -> set[str]:
 
 def load_invoices_file(filepath: str) -> pd.DataFrame:
     """
-    Read Invoices.xlsx. Each row is one invoice-detail record (one ChargeID).
+    Read Invoices.csv. Each row is one invoice-detail record (one ChargeID).
     An invoice may have multiple detail rows; we group them later by InvoiceID.
     """
     logger.info(f"Loading invoices file: {filepath}")
-    df = pd.read_excel(filepath, dtype=str)
+    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df.columns = df.columns.str.strip()
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
@@ -507,8 +507,8 @@ def parse_args(args=None):
     p = argparse.ArgumentParser(
         description="SiteLink Invoices + Payments → storentic.invoices migration"
     )
-    p.add_argument("--file-invoices", required=True, help="Path to Invoices.xlsx")
-    p.add_argument("--file-payments", required=True, help="Path to Payments_csv.csv")
+    p.add_argument("--file-invoices", required=True, help="Path to Invoices.csv")
+    p.add_argument("--file-payments", required=True, help="Path to Payments.csv")
     p.add_argument("--dry-run", action="store_true", help="Preview without writing to DB")
     return p.parse_args(args)
 

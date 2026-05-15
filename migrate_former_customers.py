@@ -25,13 +25,13 @@ Key behaviours
 Usage
 -----
     # Dry run — shows counts, no DB writes
-    python migrate_former_customers.py --file "data/FormerTenants.xlsx" --dry-run
+    python migrate_former_customers.py --file "data/FormerTenants.csv" --dry-run
 
     # Live import
-    python migrate_former_customers.py --file "data/FormerTenants.xlsx"
+    python migrate_former_customers.py --file "data/FormerTenants.csv"
 
     # Export to Excel for QA review before importing
-    python migrate_former_customers.py --file "data/FormerTenants.xlsx" --output excel
+    python migrate_former_customers.py --file "data/FormerTenants.csv" --output excel
 
 Environment (.env)
 ------------------
@@ -127,7 +127,7 @@ EXCEL_OUTPUT_COLUMNS = [
 
 def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Read the Former Tenants Excel file.
+    Read the Former Tenants CSV file.
 
     Returns:
         (former_df, active_df)
@@ -138,7 +138,8 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     the customer table, not here.
     """
     logger.info(f"Loading file: {filepath}")
-    df = pd.read_excel(filepath, dtype=str)
+    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
     df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
 

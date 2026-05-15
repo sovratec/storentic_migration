@@ -35,12 +35,12 @@ Usage
 -----
     python migrate_credits.py \\
         --file-credits  "data/Credits.csv" \\
-        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
+        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
         --output db
 
     python migrate_credits.py \\
         --file-credits  "data/Credits.csv" \\
-        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.xlsx" \\
+        --file-tenants  "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
         --output db --dry-run
 
 Environment (.env)
@@ -168,10 +168,11 @@ def load_credits_file(filepath: str) -> pd.DataFrame:
 
 def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
     """
-    Read Tenants file → {LedgerID: TenantID}, {LedgerID: sUnitName}
+    Read Tenants CSV → {LedgerID: TenantID}, {LedgerID: sUnitName}
     """
     logger.info(f"Loading tenants file: {tenants_file}")
-    df = pd.read_excel(tenants_file, dtype=str)
+    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
 
     required = {"LedgerID", "TenantID", "sUnitName"}

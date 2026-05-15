@@ -2,16 +2,16 @@
 migrate_customers.py — ETL script for loading legacy Customer data.
 
 Usage (standalone):
-    python migrate_customers.py --file data/CustomerUnitSample.xlsx --output db
-    python migrate_customers.py --file data/CustomerUnitSample.xlsx --output db --dry-run
-    python migrate_customers.py --file data/CustomerUnitSample.xlsx --output db --update
-    python migrate_customers.py --file data/CustomerUnitSample.xlsx --output excel
+    python migrate_customers.py --file data/CustomerUnitSample.csv --output db
+    python migrate_customers.py --file data/CustomerUnitSample.csv --output db --dry-run
+    python migrate_customers.py --file data/CustomerUnitSample.csv --output db --update
+    python migrate_customers.py --file data/CustomerUnitSample.csv --output excel
 
 Usage (via unified entry point — preferred):
-    python migrate.py --type customer --file data/CustomerUnitSample.xlsx [--output db|excel] [--dry-run] [--update]
+    python migrate.py --type customer --file data/CustomerUnitSample.csv [--output db|excel] [--dry-run] [--update]
 
 Arguments:
-    --file      Path to the source Excel file (required)
+    --file      Path to the source CSV file (required)
     --output    Destination: 'db' (default) or 'excel'
     --out-file  [excel mode only] Output Excel filename
     --dry-run   [db mode only] Preview without writing to DB
@@ -268,7 +268,7 @@ def write_to_excel(records: list[dict], out_path: str):
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser(description="Storentic Customers ETL Migration")
-    parser.add_argument("--file",     required=True,  help="Path to source Excel file")
+    parser.add_argument("--file",     required=True,  help="Path to source CSV file")
     parser.add_argument("--output",   default="db",   choices=["db", "excel"],
                         help="Output destination: 'db' (default) or 'excel'")
     parser.add_argument("--out-file", default=None,   help="[excel mode] Output file path")
