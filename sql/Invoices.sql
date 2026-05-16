@@ -1,0 +1,1 @@
+select * from invoices i join invoiceDetails d on i.invoiceId=d.invoiceid
