@@ -1,7 +1,7 @@
 """
 migrate_payments.py — ETL script: SiteLink Payments → storentic.payments
 
-Usage:
+Usage :
     # Dry run (preview row counts, no DB writes)
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\

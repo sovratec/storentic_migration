@@ -4,7 +4,7 @@ migrate.py — Unified entry point for Storentic ETL migrations.
 Selects the migration type at runtime using the --type flag, then delegates
 to the appropriate module (migrate_units or migrate_customers).
 
-Usage:
+Usage :
     # Unit migration
     python migrate.py --type unit --file data/Units.xlsx
     python migrate.py --type unit --file data/Units.xlsx --output excel

@@ -1,7 +1,7 @@
 """
 migrate_rental_agreements.py — ETL script for loading legacy rental_agreements data.
 
-Usage (standalone):
+Usage (standalone) :
     python migrate_rental_agreements.py --file data/CustomerUnitSample.csv --output db
     python migrate_rental_agreements.py --file data/CustomerUnitSample.csv --output db --dry-run
     python migrate_rental_agreements.py --file data/CustomerUnitSample.csv --output db --update

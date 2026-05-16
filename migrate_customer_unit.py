@@ -1,7 +1,7 @@
 """
 migrate_customer_unit.py — ETL script for loading legacy customer_unit data.
 
-Usage (standalone):
+Usage (standalone) :
     python migrate_customer_unit.py --file data/CustomerUnitSample.csv --output db
     python migrate_customer_unit.py --file data/CustomerUnitSample.csv --output db --dry-run
     python migrate_customer_unit.py --file data/CustomerUnitSample.csv --output db --update

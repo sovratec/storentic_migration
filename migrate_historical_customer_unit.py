@@ -5,7 +5,7 @@ Source : Tenants+Units+Ledgers+Access CSV file (SiteLink export)
 Filter : Only rows where dMovedOut IS NOT NULL (former tenants with a completed tenancy)
 Target : storentic.customer_unit
 
-Usage:
+Usage :
     python migrate_historical_customer_unit.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db
     python migrate_historical_customer_unit.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db --dry-run
     python migrate_historical_customer_unit.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output excel

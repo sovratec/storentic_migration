@@ -7,7 +7,7 @@ Usage (standalone):
     python migrate_customers.py --file data/CustomerUnitSample.csv --output db --update
     python migrate_customers.py --file data/CustomerUnitSample.csv --output excel
 
-Usage (via unified entry point — preferred):
+Usage (via unified entry point — preferred) :
     python migrate.py --type customer --file data/CustomerUnitSample.csv [--output db|excel] [--dry-run] [--update]
 
 Arguments:

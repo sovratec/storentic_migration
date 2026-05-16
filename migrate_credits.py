@@ -4,7 +4,7 @@ migrate_credits.py — ETL script: SiteLink Credits CSV → storentic.ledger_cha
 Credits are stored as negative-amount ledger charges with a Waived Off charge type.
 
 Column mapping
---------------
+---------------
 external_charge_id  = CreditID
 customer_id         = TenantID  (lookup → storentic.customer.external_id)
 unit_id             = sUnitName (lookup → storentic.units.unit_number + LOCATION_ID, nullable)

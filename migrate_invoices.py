@@ -4,7 +4,7 @@ migrate_invoices.py
 ETL script: SiteLink Invoices export + Payments CSV → storentic.invoices
 
 Column mapping
---------------
+---------------
 invoice_number       = iInvoiceNum
 customer_id          = storentic.ledger_charges.customer_id  (join on external_charge_id = ChargeID)
 invoice_type_id      = derived from ledger_charges.charge_type_id:

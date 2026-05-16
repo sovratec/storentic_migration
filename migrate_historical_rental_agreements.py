@@ -5,7 +5,7 @@ Source : Tenants+Units+Ledgers+Access CSV file (SiteLink export)
 Filter : Only rows where dMovedOut IS NOT NULL (completed tenancies)
 Target : storentic.rental_agreements  (status = TERMINATED)
 
-Usage:
+Usage :
     python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db
     python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output db --dry-run
     python migrate_historical_rental_agreements.py --file "data/Tenants_Units_Ledgers_Access_20260502.csv" --output excel

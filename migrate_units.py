@@ -1,7 +1,7 @@
 """
 migrate_units.py — Main ETL script for loading legacy Unit data.
 
-Usage:
+Usage :
     # Insert transformed records into PostgreSQL (default)
     python migrate_units.py --file data/Units.csv --output db
 

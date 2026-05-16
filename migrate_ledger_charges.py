@@ -1,7 +1,7 @@
 """
 migrate_ledger_charges.py — ETL script: SiteLink Select Charges → storentic.ledger_charges
 
-Usage:
+Usage :
     # Dry run (preview row counts, no DB writes)
     python migrate_ledger_charges.py \\
         --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\

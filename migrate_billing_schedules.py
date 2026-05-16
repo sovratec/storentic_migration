@@ -8,7 +8,7 @@ Source
   RentRoll.csv                     : Unit → Charge Day (primary source for charge_day)
 
 DB lookups
-----------
+-----------
   storentic.customer      : external_id = TenantID → customer_id
   storentic.units         : unit_number = sUnitName → unit_id
   storentic.customer_unit : customer_id + unit_id, move_out_date IS NULL → customer_unit_id

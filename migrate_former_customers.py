@@ -3,7 +3,7 @@ migrate_former_customers.py
 ===========================
 ETL script: SiteLink "All Former Tenants" Excel export -> storentic.customer
 
-Source format (differs from active-tenant export used by migrate_customers.py):
+Source format (differs from active-tenant export  used by migrate_customers.py):
     LOCATIONCODE, SITENAME, UNITNAME, SALUTATION,
     FIRSTNAME, MI, LASTNAME, NAME, COMPANY,
     ADDRESS1, ADDRESS2, CITY, STATE, ZIPCODE,
