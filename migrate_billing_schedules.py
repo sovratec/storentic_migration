@@ -47,7 +47,7 @@ import argparse
 import os
 import sys
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from urllib.parse import quote_plus
 
 import pandas as pd
@@ -116,7 +116,8 @@ def parse_date(val) -> date | None:
         return None
     s = str(val).strip()
     for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%m/%d/%y',
-                '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
+                '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S',
+                '%m-%d-%Y %H:%M:%S.%f', '%m-%d-%Y %H:%M:%S', '%m-%d-%Y'):
         try:
             return datetime.strptime(s, fmt).date()
         except ValueError:
@@ -133,18 +134,18 @@ def load_tenants(filepath: str) -> pd.DataFrame:
     logger.info(f"Loading tenants file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
 
-    required = {"TenantID", "sUnitName", "LedgerID", "BillingFreqID", "dLease", "dMovedOut"}
+    required = {"TENANTID", "SUNITNAME", "LEDGERID", "BILLINGFREQID", "DLEASE", "DMOVEDOUT"}
     missing = required - set(df.columns)
     if missing:
         raise SystemExit(f"Tenants file missing columns: {missing}")
 
     total = len(df)
     # Active = dMovedOut blank/null AND ledger dDeleted2 blank/null
-    active = df[df["dMovedOut"].isna() | (df["dMovedOut"].str.strip() == "")]
-    if "dDeleted2" in df.columns:
-        active = active[active["dDeleted2"].isna() | (active["dDeleted2"].str.strip() == "")]
+    active = df[df["DMOVEDOUT"].isna() | (df["DMOVEDOUT"].str.strip() == "")]
+    if "DDELETED2" in df.columns:
+        active = active[active["DDELETED2"].isna() | (active["DDELETED2"].str.strip() == "")]
     active = active.reset_index(drop=True)
 
     logger.info(f"    Total rows  : {total:,}")
@@ -156,11 +157,11 @@ def load_rentroll_charge_days(filepath: str) -> dict:
     """Load RentRoll CSV → {unit_number (str): charge_day (int)}."""
     logger.info(f"Loading RentRoll file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     mapping = {}
     for _, row in df.iterrows():
-        unit = str(row.get("Unit", "") or "").strip()
-        day  = str(row.get("Charge Day", "") or "").strip()
+        unit = str(row.get("UNIT", "") or "").strip()
+        day  = str(row.get("CHARGE DAY", "") or "").strip()
         if unit and day:
             try:
                 mapping[unit] = int(float(day))
@@ -221,7 +222,7 @@ def run(args):
     org_id     = int(os.getenv("ORGANIZATION_ID", "1"))
     created_by = int(os.getenv("CREATED_BY", "9"))
     dry_run    = args.dry_run or os.getenv("DRY_RUN", "").lower() == "true"
-    now        = datetime.utcnow()
+    now        = datetime.now(timezone.utc).replace(tzinfo=None)
 
     logger.info("=" * 60)
     logger.info("  BILLING SCHEDULES MIGRATION STARTING")
@@ -252,33 +253,33 @@ def run(args):
 
     for _, row in tenants.iterrows():
         stats["total"] += 1
-        tenant_id = str(row.get("TenantID", "") or "").strip()
-        unit_name = str(row.get("sUnitName", "") or "").strip()
-        freq_id   = str(row.get("BillingFreqID", "") or "").strip()
-        lease_raw = row.get("dLease")
+        tenant_id = str(row.get("TENANTID", "") or "").strip()
+        unit_name = str(row.get("SUNITNAME", "") or "").strip()
+        freq_id   = str(row.get("BILLINGFREQID", "") or "").strip()
+        lease_raw = row.get("DLEASE")
 
         # ── BillingFrequency ──────────────────────────────────────────────────
         freq = _FREQ_MAP.get(freq_id)
         if not freq:
-            log_skipped(0, unit_name, "BillingFreqID", f"Unknown BillingFreqID={freq_id!r}", freq_id)
+            log_skipped(0, unit_name, "BILLINGFREQID", f"Unknown BillingFreqID={freq_id!r}", freq_id)
             stats["skipped"] += 1
             continue
         if freq not in _SUPPORTED_FREQS:
-            log_skipped(0, unit_name, "BillingFreqID", f"Unsupported frequency {freq} (FreqID={freq_id})", freq_id)
+            log_skipped(0, unit_name, "BILLINGFREQID", f"Unsupported frequency {freq} (FreqID={freq_id})", freq_id)
             stats["skipped"] += 1
             continue
 
         # ── customer_id ───────────────────────────────────────────────────────
         customer_id = customer_map.get(tenant_id)
         if not customer_id:
-            log_skipped(0, unit_name, "TenantID", f"No customer for TenantID={tenant_id}", tenant_id)
+            log_skipped(0, unit_name, "TENANTID", f"No customer for TenantID={tenant_id}", tenant_id)
             stats["skipped"] += 1
             continue
 
         # ── unit_id ───────────────────────────────────────────────────────────
         unit_id = unit_map.get(unit_name)
         if not unit_id:
-            log_skipped(0, unit_name, "sUnitName", f"No unit for unit_number={unit_name!r}", unit_name)
+            log_skipped(0, unit_name, "SUNITNAME", f"No unit for unit_number={unit_name!r}", unit_name)
             stats["skipped"] += 1
             continue
 
@@ -293,7 +294,7 @@ def run(args):
         # ── charge_day: RentRoll → iProcessDayOfMonth → day of dLease ────────
         charge_day = rr_map.get(unit_name)
         if not charge_day:
-            proc_day = str(row.get("iProcessDayOfMonth", "") or "").strip()
+            proc_day = str(row.get("IPROCESSDAYOFMONTH", "") or "").strip()
             if proc_day and proc_day not in ('0', ''):
                 try:
                     charge_day = int(float(proc_day))
@@ -307,7 +308,7 @@ def run(args):
         # ── start_date = dLease ───────────────────────────────────────────────
         start_date = parse_date(lease_raw)
         if not start_date:
-            log_skipped(0, unit_name, "dLease", f"Cannot parse dLease={lease_raw!r}", lease_raw)
+            log_skipped(0, unit_name, "DLEASE", f"Cannot parse dLease={lease_raw!r}", lease_raw)
             stats["skipped"] += 1
             continue
 

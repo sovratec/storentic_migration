@@ -138,11 +138,11 @@ def load_charge_type_map(charge_types_file: str) -> dict:
 
     mapping = {}
     for _, row in df.iterrows():
-        if pd.isna(row.get("id")) or pd.isna(row.get("CHARGEDESCID")):
+        if pd.isna(row.get("ID")) or pd.isna(row.get("CHARGEDESCID")):
             continue
         try:
             desc_id = int(float(row["CHARGEDESCID"]))
-            ct_id   = int(float(row["id"]))
+            ct_id   = int(float(row["ID"]))
             mapping[desc_id] = ct_id
         except (ValueError, TypeError):
             continue
@@ -350,7 +350,7 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
     dc_amt      = row.get("DCAMT")
     d_chg_strt  = _parse_dt(row.get("DCHGSTRT"))
     d_created   = _parse_dt(row.get("DCREATED"))
-    d_updated   = _parse_dt(row.get("dUpdated"))
+    d_updated   = _parse_dt(row.get("DUPDATED"))
     d_deleted   = _parse_dt(row.get("DDELETED"))
     b_nsf       = bool(row.get("BNSF", False))
     now         = datetime.utcnow()

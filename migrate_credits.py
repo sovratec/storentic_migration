@@ -106,8 +106,8 @@ EXCEL_OUTPUT_COLUMNS = [
 ]
 
 SKIPPED_COLUMNS = [
-    "CreditID", "TENANTID", "LedgerID", "dcCreditAmt", "SMEMO",
-    "dCredit", "bNonPosting", "dDeleted", "skip_reason",
+    "CREDITID", "LEDGERID", "DCCREDITAMT", "SMEMO",
+    "DCREDIT", "BNONPOSTING", "DDELETED", "skip_reason",
 ]
 
 # Sentinel date SiteLink uses for "no date" — treat as null
@@ -128,11 +128,10 @@ def load_credits_file(filepath: str) -> pd.DataFrame:
     """
     logger.info(f"Loading credits file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, low_memory=False, encoding="latin-1")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
-    required = {"CreditID", "TENANTID", "LedgerID", "dcCreditAmt", "dCredit",
-                "bNonPosting", "dDeleted", "SMEMO"}
+    required = {"CREDITID", "LEDGERID", "DCCREDITAMT", "DCREDIT", "SMEMO"}
     missing = required - set(df.columns)
     if missing:
         raise SystemExit(f"❌  Credits file missing columns: {missing}")
@@ -140,25 +139,27 @@ def load_credits_file(filepath: str) -> pd.DataFrame:
     total_raw = len(df)
 
     # Numeric amount
-    df["dcCreditAmt"] = pd.to_numeric(df["dcCreditAmt"], errors="coerce")
+    df["DCCREDITAMT"] = pd.to_numeric(df["DCCREDITAMT"], errors="coerce")
 
     # Filter: keep positive amounts only (drop double-entry negative rows + zeros)
-    df = df[df["dcCreditAmt"] > 0].copy()
+    df = df[df["DCCREDITAMT"] > 0].copy()
     logger.info(f"    After dcCreditAmt > 0 filter : {len(df):,}  (dropped {total_raw - len(df):,} negative/zero rows)")
 
-    # Filter: drop bNonPosting = True
-    before = len(df)
-    df = df[df["bNonPosting"].str.strip().str.lower() != "true"].copy()
-    logger.info(f"    After bNonPosting filter     : {len(df):,}  (dropped {before - len(df):,} non-posting rows)")
+    # Filter: drop bNonPosting = True (column may not exist in all exports)
+    if "BNONPOSTING" in df.columns:
+        before = len(df)
+        df = df[df["BNONPOSTING"].str.strip().str.lower() != "true"].copy()
+        logger.info(f"    After bNonPosting filter     : {len(df):,}  (dropped {before - len(df):,} non-posting rows)")
 
-    # Filter: drop deleted credits
-    before = len(df)
-    df = df[df["dDeleted"].isna() | (df["dDeleted"].str.strip() == "")].copy()
-    logger.info(f"    After dDeleted filter        : {len(df):,}  (dropped {before - len(df):,} deleted rows)")
+    # Filter: drop deleted credits (column may not exist in all exports)
+    if "DDELETED" in df.columns:
+        before = len(df)
+        df = df[df["DDELETED"].isna() | (df["DDELETED"].str.strip() == "")].copy()
+        logger.info(f"    After dDeleted filter        : {len(df):,}  (dropped {before - len(df):,} deleted rows)")
 
     # Filter: drop blank LedgerID
     before = len(df)
-    df = df[df["LedgerID"].notna() & (df["LedgerID"].str.strip() != "")].copy()
+    df = df[df["LEDGERID"].notna() & (df["LEDGERID"].str.strip() != "")].copy()
     logger.info(f"    After LedgerID filter        : {len(df):,}  (dropped {before - len(df):,} blank-LedgerID rows)")
 
     df = df.reset_index(drop=True)
@@ -173,9 +174,9 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
     logger.info(f"Loading tenants file: {tenants_file}")
     df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
 
-    required = {"LedgerID", "TenantID", "sUnitName"}
+    required = {"LEDGERID", "TENANTID", "SUNITNAME"}
     missing = required - set(df.columns)
     if missing:
         raise SystemExit(f"❌  Tenants file missing columns: {missing}")
@@ -185,9 +186,9 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
 
     for _, row in df.iterrows():
         try:
-            lid = int(float(row["LedgerID"]))
-            tid = int(float(row["TenantID"]))
-            unit = str(row["sUnitName"]).strip() if pd.notna(row["sUnitName"]) else None
+            lid = int(float(row["LEDGERID"]))
+            tid = int(float(row["TENANTID"]))
+            unit = str(row["SUNITNAME"]).strip() if pd.notna(row["SUNITNAME"]) else None
             ledger_to_tenant[lid] = tid
             ledger_to_unit[lid]   = unit
         except (ValueError, TypeError):
@@ -360,7 +361,7 @@ def process_credits(
         stats["total"] += 1
         excel_row = row_idx + 2
 
-        credit_id = str(row.get("CreditID", "")).strip()
+        credit_id = str(row.get("CREDITID", "")).strip()
 
         # ── Deduplication ─────────────────────────────────────────────────────
         if credit_id in existing_ids:
@@ -373,10 +374,10 @@ def process_credits(
         if charge_type_id is None:
             reason = f"SMEMO '{smemo}' has no charge_type mapping"
             skipped_rows.append({
-                "CreditID": credit_id, "TENANTID": row.get("TENANTID"),
-                "LedgerID": row.get("LedgerID"), "dcCreditAmt": row.get("dcCreditAmt"),
-                "SMEMO": smemo, "dCredit": row.get("dCredit"),
-                "bNonPosting": row.get("bNonPosting"), "dDeleted": row.get("dDeleted"),
+                "CREDITID": credit_id, "TENANTID": row.get("TENANTID"),
+                "LEDGERID": row.get("LEDGERID"), "DCCREDITAMT": row.get("DCCREDITAMT"),
+                "SMEMO": smemo, "DCREDIT": row.get("DCREDIT"),
+                "BNONPOSTING": row.get("BNONPOSTING"), "DDELETED": row.get("DDELETED"),
                 "skip_reason": reason,
             })
             log_skipped(excel_row, credit_id, "SMEMO", reason, smemo)
@@ -385,9 +386,9 @@ def process_credits(
 
         # ── Resolve customer_id ───────────────────────────────────────────────
         try:
-            ledger_id = int(float(row["LedgerID"]))
+            ledger_id = int(float(row["LEDGERID"]))
         except (ValueError, TypeError):
-            log_error(excel_row, credit_id, "LedgerID", "Cannot parse LedgerID", row.get("LedgerID"))
+            log_error(excel_row, credit_id, "LEDGERID", "Cannot parse LedgerID", row.get("LEDGERID"))
             stats["errors"] += 1
             continue
 
@@ -396,13 +397,13 @@ def process_credits(
         if customer_id is None:
             reason = f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer"
             skipped_rows.append({
-                "CreditID": credit_id, "TENANTID": row.get("TENANTID"),
-                "LedgerID": ledger_id, "dcCreditAmt": row.get("dcCreditAmt"),
-                "SMEMO": smemo, "dCredit": row.get("dCredit"),
-                "bNonPosting": row.get("bNonPosting"), "dDeleted": row.get("dDeleted"),
+                "CREDITID": credit_id, "TENANTID": row.get("TENANTID"),
+                "LEDGERID": ledger_id, "DCCREDITAMT": row.get("DCCREDITAMT"),
+                "SMEMO": smemo, "DCREDIT": row.get("DCREDIT"),
+                "BNONPOSTING": row.get("BNONPOSTING"), "DDELETED": row.get("DDELETED"),
                 "skip_reason": reason,
             })
-            log_skipped(excel_row, credit_id, "LedgerID", reason, ledger_id)
+            log_skipped(excel_row, credit_id, "LEDGERID", reason, ledger_id)
             stats["skipped_no_cust"] += 1
             continue
 
@@ -411,8 +412,8 @@ def process_credits(
         unit_id   = unit_map.get(unit_name) if unit_name else None
 
         # ── Dates ─────────────────────────────────────────────────────────────
-        effective_date = _parse_dt(row.get("dCredit")) or now
-        created_dt     = _parse_dt(row.get("dCreated")) or effective_date
+        effective_date = _parse_dt(row.get("DCREDIT")) or now
+        created_dt     = _parse_dt(row.get("DCREATED")) or effective_date
 
         # ── Build record ──────────────────────────────────────────────────────
         record = {
@@ -422,7 +423,7 @@ def process_credits(
             "location_id":        loc_id,
             "organization_id":    org_id,
             "charge_type_id":     charge_type_id,
-            "amount_in_cents":    _to_negative_cents(row.get("dcCreditAmt")),
+            "amount_in_cents":    _to_negative_cents(row.get("DCCREDITAMT")),
             "effective_date":     effective_date,
             "memo":               smemo or None,
             "internal_note":      None,
