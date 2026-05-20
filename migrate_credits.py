@@ -303,24 +303,123 @@ def process_credits(
     batch_size: int,
 ) -> dict:
 
+    total_raw = len(df)
     stats = {
-        "total": 0, "inserted": 0, "skipped_dup": 0,
+        "total": total_raw, "inserted": 0, "skipped_dup": 0,
         "skipped_no_cust": 0, "skipped_no_memo_map": 0,
         "errors": 0, "dry_run": dry_run, "output_mode": output_mode,
     }
 
-    excel_records = []
-    skipped_rows  = []
-    batch_tuples  = []
-    batch_ids     = []
-
     now = datetime.utcnow()
 
-    raw_conn   = None
-    raw_cursor = None
-    if output_mode == "db" and not dry_run:
-        raw_conn   = engine.raw_connection()
-        raw_cursor = raw_conn.cursor()
+    # ── Step 1: Vectorized pre-filter ─────────────────────────────────────────
+
+    # Build external_credit_id and dedup
+    df["ext_credit_id"] = df["CREDITID"].apply(lambda x: str(x).strip())
+    dup_mask = df["ext_credit_id"].isin(existing_ids)
+    stats["skipped_dup"] = int(dup_mask.sum())
+    df = df[~dup_mask].copy()
+
+    # Normalise SMEMO and map to charge_type_id
+    df["_smemo_norm"] = df["SMEMO"].fillna("").str.strip().str.lower()
+    df["charge_type_id"] = df["_smemo_norm"].map(_SMEMO_TO_CHARGE_TYPE)
+    no_map_df = df[df["charge_type_id"].isna()].copy()
+    stats["skipped_no_memo_map"] = len(no_map_df)
+    df = df[df["charge_type_id"].notna()].copy()
+    df["charge_type_id"] = df["charge_type_id"].astype(int)
+
+    # Parse LedgerID and resolve tenant_id → customer_id
+    df["LEDGERID_INT"] = pd.to_numeric(df["LEDGERID"], errors="coerce")
+    bad_lid = df["LEDGERID_INT"].isna()
+    if bad_lid.any():
+        stats["errors"] += int(bad_lid.sum())
+        logger.warning(f"    Dropped {bad_lid.sum()} rows with unparseable LEDGERID")
+    df = df[~bad_lid].copy()
+    df["LEDGERID_INT"] = df["LEDGERID_INT"].astype(int)
+
+    df["tenant_id"]   = df["LEDGERID_INT"].map(ledger_to_tenant)
+    df["customer_id"] = df["tenant_id"].map(
+        lambda t: customer_map.get(int(t)) if pd.notna(t) else None
+    )
+    no_cust_df = df[df["customer_id"].isna()].copy()
+    stats["skipped_no_cust"] = len(no_cust_df)
+    df = df[df["customer_id"].notna()].copy()
+    df["customer_id"] = df["customer_id"].astype(int)
+
+    # Resolve unit_id (nullable)
+    df["_unit_name"] = df["LEDGERID_INT"].map(ledger_to_unit)
+    df["unit_id"]    = df["_unit_name"].map(
+        lambda u: unit_map.get(str(u).strip()) if pd.notna(u) else None
+    )
+
+    df = df.reset_index(drop=True)
+
+    logger.info(f"    After pre-filter      : {len(df):,} rows to process")
+    logger.info(f"    Skipped duplicates    : {stats['skipped_dup']:,}")
+    logger.info(f"    Skipped no-SMEMO-map  : {stats['skipped_no_memo_map']:,}")
+    logger.info(f"    Skipped no-customer   : {stats['skipped_no_cust']:,}")
+    print(f"  {len(df):,} rows to insert after filtering\n", flush=True)
+
+    # ── Build skipped-rows list ───────────────────────────────────────────────
+    skipped_rows: list[dict] = []
+    for r in no_map_df.itertuples(index=False):
+        rd = r._asdict()
+        smemo = rd.get("SMEMO", "") or ""
+        skipped_rows.append({
+            "CREDITID": rd.get("CREDITID"), "LEDGERID": rd.get("LEDGERID"),
+            "DCCREDITAMT": rd.get("DCCREDITAMT"), "SMEMO": smemo,
+            "DCREDIT": rd.get("DCREDIT"),
+            "BNONPOSTING": rd.get("BNONPOSTING") if "BNONPOSTING" in rd else None,
+            "DDELETED": rd.get("DDELETED") if "DDELETED" in rd else None,
+            "skip_reason": f"SMEMO '{smemo.strip()}' has no charge_type mapping",
+        })
+    for r in no_cust_df.itertuples(index=False):
+        rd = r._asdict()
+        ledger_id = rd.get("LEDGERID_INT")
+        tenant_id = ledger_to_tenant.get(int(ledger_id)) if ledger_id else None
+        skipped_rows.append({
+            "CREDITID": rd.get("CREDITID"), "LEDGERID": rd.get("LEDGERID"),
+            "DCCREDITAMT": rd.get("DCCREDITAMT"), "SMEMO": rd.get("SMEMO"),
+            "DCREDIT": rd.get("DCREDIT"),
+            "BNONPOSTING": rd.get("BNONPOSTING") if "BNONPOSTING" in rd else None,
+            "DDELETED": rd.get("DDELETED") if "DDELETED" in rd else None,
+            "skip_reason": f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer",
+        })
+
+    if dry_run:
+        stats["inserted"] = len(df)
+        logger.info(f"DRY RUN — {len(df):,} rows would be inserted.")
+        _write_skipped(skipped_rows, stats)
+        return stats
+
+    # ── Step 2: Excel export mode ──────────────────────────────────────────────
+    if output_mode == "excel":
+        excel_records = []
+        for row in df.itertuples(index=False):
+            rd = row._asdict()
+            credit_id      = rd["ext_credit_id"]
+            smemo          = str(rd.get("SMEMO", "") or "").strip()
+            effective_date = _parse_dt(rd.get("DCREDIT")) or now
+            created_dt     = _parse_dt(rd.get("DCREATED")) or effective_date
+            record = _build_record(
+                credit_id, rd["customer_id"],
+                rd["unit_id"] if pd.notna(rd.get("unit_id")) else None,
+                rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
+                effective_date, created_dt, loc_id, org_id, created_by,
+            )
+            excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
+            stats["inserted"] += 1
+        if excel_records:
+            _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "Credits")
+            stats["excel_output"] = out_file
+        _write_skipped(skipped_rows, stats)
+        return stats
+
+    # ── Step 3: Transform with itertuples + bulk insert ────────────────────────
+    batch_tuples: list[tuple] = []
+    batch_ids:    list[str]   = []
+    raw_conn   = engine.raw_connection()
+    raw_cursor = raw_conn.cursor()
 
     def flush_batch():
         if not batch_tuples:
@@ -355,135 +454,82 @@ def process_credits(
             batch_tuples.clear()
             batch_ids.clear()
 
-    print(f"\n  Processing {len(df):,} rows ...\n", flush=True)
-
-    for row_idx, row in df.iterrows():
-        stats["total"] += 1
-        excel_row = row_idx + 2
-
-        credit_id = str(row.get("CREDITID", "")).strip()
-
-        # ── Deduplication ─────────────────────────────────────────────────────
-        if credit_id in existing_ids:
-            stats["skipped_dup"] += 1
-            continue
-
-        # ── Derive charge_type_id from SMEMO ──────────────────────────────────
-        smemo = str(row.get("SMEMO", "") or "").strip()
-        charge_type_id = _derive_charge_type(smemo)
-        if charge_type_id is None:
-            reason = f"SMEMO '{smemo}' has no charge_type mapping"
-            skipped_rows.append({
-                "CREDITID": credit_id, "TENANTID": row.get("TENANTID"),
-                "LEDGERID": row.get("LEDGERID"), "DCCREDITAMT": row.get("DCCREDITAMT"),
-                "SMEMO": smemo, "DCREDIT": row.get("DCREDIT"),
-                "BNONPOSTING": row.get("BNONPOSTING"), "DDELETED": row.get("DDELETED"),
-                "skip_reason": reason,
-            })
-            log_skipped(excel_row, credit_id, "SMEMO", reason, smemo)
-            stats["skipped_no_memo_map"] += 1
-            continue
-
-        # ── Resolve customer_id ───────────────────────────────────────────────
+    total_to_insert = len(df)
+    for row in df.itertuples(index=False):
+        rd         = row._asdict()
+        credit_id  = rd["ext_credit_id"]
+        smemo      = str(rd.get("SMEMO", "") or "").strip()
+        unit_id    = rd["unit_id"] if pd.notna(rd.get("unit_id")) else None
         try:
-            ledger_id = int(float(row["LEDGERID"]))
-        except (ValueError, TypeError):
-            log_error(excel_row, credit_id, "LEDGERID", "Cannot parse LedgerID", row.get("LEDGERID"))
-            stats["errors"] += 1
-            continue
-
-        tenant_id   = ledger_to_tenant.get(ledger_id)
-        customer_id = customer_map.get(tenant_id) if tenant_id else None
-        if customer_id is None:
-            reason = f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer"
-            skipped_rows.append({
-                "CREDITID": credit_id, "TENANTID": row.get("TENANTID"),
-                "LEDGERID": ledger_id, "DCCREDITAMT": row.get("DCCREDITAMT"),
-                "SMEMO": smemo, "DCREDIT": row.get("DCREDIT"),
-                "BNONPOSTING": row.get("BNONPOSTING"), "DDELETED": row.get("DDELETED"),
-                "skip_reason": reason,
-            })
-            log_skipped(excel_row, credit_id, "LEDGERID", reason, ledger_id)
-            stats["skipped_no_cust"] += 1
-            continue
-
-        # ── Resolve unit_id (nullable) ────────────────────────────────────────
-        unit_name = ledger_to_unit.get(ledger_id)
-        unit_id   = unit_map.get(unit_name) if unit_name else None
-
-        # ── Dates ─────────────────────────────────────────────────────────────
-        effective_date = _parse_dt(row.get("DCREDIT")) or now
-        created_dt     = _parse_dt(row.get("DCREATED")) or effective_date
-
-        # ── Build record ──────────────────────────────────────────────────────
-        record = {
-            "external_charge_id": credit_id,
-            "customer_id":        customer_id,
-            "unit_id":            unit_id,
-            "location_id":        loc_id,
-            "organization_id":    org_id,
-            "charge_type_id":     charge_type_id,
-            "amount_in_cents":    _to_negative_cents(row.get("DCCREDITAMT")),
-            "effective_date":     effective_date,
-            "memo":               smemo or None,
-            "internal_note":      None,
-            "status":             "POSTED",
-            "invoice_id":         None,
-            "source_screen":      "MIGRATION",
-            "reversed_by_id":     None,
-            "reversed_at":        None,
-            "reversal_reason":    None,
-            "created_by":         created_by,
-            "created_at":         created_dt,
-            "updated_at":         created_dt,
-        }
-
-        # ── Route to output ───────────────────────────────────────────────────
-        if output_mode == "excel":
-            excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
-            existing_ids.add(credit_id)
-            stats["inserted"] += 1
-
-        elif dry_run:
-            stats["inserted"] += 1
-
-        else:
+            effective_date = _parse_dt(rd.get("DCREDIT")) or now
+            created_dt     = _parse_dt(rd.get("DCREATED")) or effective_date
+            record = _build_record(
+                credit_id, rd["customer_id"], unit_id,
+                rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
+                effective_date, created_dt, loc_id, org_id, created_by,
+            )
             batch_tuples.append(tuple(record[col] for col in _INSERT_COLS))
             batch_ids.append(credit_id)
             existing_ids.add(credit_id)
             if len(batch_tuples) >= batch_size:
                 flush_batch()
+                pct = min(100, stats["inserted"] / total_to_insert * 100)
+                print(
+                    f"  {pct:5.1f}%  |  inserted {stats['inserted']:,} / {total_to_insert:,}"
+                    f"  err={stats['errors']:,}",
+                    flush=True,
+                )
+        except Exception as exc:
+            log_error(0, credit_id, "TRANSFORM", str(exc), credit_id)
+            stats["errors"] += 1
 
-        if stats["total"] % 500 == 0:
-            pct = stats["total"] / len(df) * 100
-            print(
-                f"  {pct:5.1f}%  |  {stats['total']:,}/{len(df):,}"
-                f"  inserted={stats['inserted']:,}"
-                f"  skip_cust={stats['skipped_no_cust']:,}"
-                f"  skip_map={stats['skipped_no_memo_map']:,}"
-                f"  err={stats['errors']:,}",
-                flush=True,
-            )
+    flush_batch()
+    raw_cursor.close()
+    raw_conn.close()
 
-    # ── Flush and close ───────────────────────────────────────────────────────
-    if output_mode == "db" and not dry_run:
-        flush_batch()
-        raw_cursor.close()
-        raw_conn.close()
-
-    # ── Write Excel outputs ───────────────────────────────────────────────────
-    if output_mode == "excel" and excel_records:
-        _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "Credits")
-        stats["excel_output"] = out_file
-
-    if skipped_rows:
-        ts           = datetime.now().strftime("%Y%m%d_%H%M%S")
-        skipped_path = os.path.join(OUTPUT_DIR, f"credits_skipped_{ts}.xlsx")
-        _write_excel(skipped_rows, skipped_path, SKIPPED_COLUMNS, "Skipped")
-        stats["skipped_output"] = skipped_path
-        print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows → {skipped_path}", flush=True)
-
+    _write_skipped(skipped_rows, stats)
     return stats
+
+
+def _build_record(
+    credit_id: str, customer_id: int, unit_id,
+    charge_type_id: int, smemo: str, dc_credit_amt,
+    effective_date: datetime, created_dt: datetime,
+    loc_id: int, org_id: int, created_by: int,
+) -> dict:
+    """Assemble the ledger_charges insert dict for one credit row."""
+    return {
+        "external_charge_id": credit_id,
+        "customer_id":        customer_id,
+        "unit_id":            unit_id,
+        "location_id":        loc_id,
+        "organization_id":    org_id,
+        "charge_type_id":     charge_type_id,
+        "amount_in_cents":    _to_negative_cents(dc_credit_amt),
+        "effective_date":     effective_date,
+        "memo":               smemo or None,
+        "internal_note":      None,
+        "status":             "POSTED",
+        "invoice_id":         None,
+        "source_screen":      "MIGRATION",
+        "reversed_by_id":     None,
+        "reversed_at":        None,
+        "reversal_reason":    None,
+        "created_by":         created_by,
+        "created_at":         created_dt,
+        "updated_at":         created_dt,
+    }
+
+
+def _write_skipped(skipped_rows: list, stats: dict):
+    """Write skipped rows to Excel and update stats."""
+    if not skipped_rows:
+        return
+    ts           = datetime.now().strftime("%Y%m%d_%H%M%S")
+    skipped_path = os.path.join(OUTPUT_DIR, f"credits_skipped_{ts}.xlsx")
+    _write_excel(skipped_rows, skipped_path, SKIPPED_COLUMNS, "Skipped")
+    stats["skipped_output"] = skipped_path
+    print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows → {skipped_path}", flush=True)
 
 
 def _write_excel(records: list, out_path: str, columns: list, sheet_name: str):
