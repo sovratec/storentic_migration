@@ -62,6 +62,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts.utils import normalize_columns
 from scripts import rental_agreement_transformer as T
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -372,6 +373,10 @@ def main(args=None):
     df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
     df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
     df_raw.columns = df_raw.columns.str.strip()
+    df_raw = normalize_columns(df_raw, ["TenantID", "sUnitName", "dMovedIn", "dLease",
+                                         "dPaidThru", "dMovedOut", "dSchedOut",
+                                         "dcRent", "dcSchedRent", "dcSecDepPaid",
+                                         "dcInsurPremium"])
 
     missing = REQUIRED_COLS - set(df_raw.columns)
     if missing:

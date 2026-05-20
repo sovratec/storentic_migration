@@ -12,6 +12,7 @@ Supports three modes:
 
 import pandas as pd
 from scripts.logger import logger, LOGS_DIR
+from scripts.utils import normalize_columns
 import os
 
 # Short alias -> actual Excel column header (partial match key)
@@ -137,6 +138,8 @@ def validate(filepath: str, mode: str = "unit") -> tuple[pd.DataFrame, dict]:
     logger.info(f"    Migration mode : {mode.upper()}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
+    df.columns = df.columns.str.strip()
+    df = normalize_columns(df, required_keys)
 
     # Strip whitespace from all string values
     df = df.apply(lambda col: col.str.strip() if col.dtype == "object" else col)

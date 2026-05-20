@@ -79,6 +79,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts.utils import normalize_columns
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -135,6 +136,8 @@ def load_charge_type_map(charge_types_file: str) -> dict:
     logger.info(f"📂  Loading charge type mapping: {charge_types_file}")
     df = pd.read_csv(charge_types_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
+    df.columns = df.columns.str.strip()
+    df = normalize_columns(df, ["id", "ChargeDescID"])
 
     mapping = {}
     for _, row in df.iterrows():
@@ -160,6 +163,7 @@ def load_charge_desc_map(charge_desc_file: str) -> dict:
     df = pd.read_csv(charge_desc_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
+    df = normalize_columns(df, ["ChargeDescID", "sChgDesc"])
 
     if "ChargeDescID" not in df.columns or "sChgDesc" not in df.columns:
         raise SystemExit(
@@ -192,6 +196,7 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
     df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
+    df = normalize_columns(df, ["LedgerID", "TenantID", "sUnitName"])
 
     required = {"LedgerID", "TenantID", "sUnitName"}
     missing  = required - set(df.columns)
@@ -425,6 +430,8 @@ def process_charges(
     df = pd.read_csv(charges_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
+    df = normalize_columns(df, ["ChargeID", "LedgerID", "ChargeDescID", "dcAmt",
+                                 "dChgStrt", "dCreated", "bNSF", "dDeleted"])
     df = df[df["ChargeID"].notna() & (df["ChargeID"].str.strip() != "")].copy()
     logger.info(f"    Charge rows to process: {len(df):,}")
     print(f"\n  Processing {len(df):,} rows — batch size {batch_size:,}\n", flush=True)
