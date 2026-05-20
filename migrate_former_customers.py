@@ -140,7 +140,7 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     logger.info(f"Loading file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
 
     required = {"FIRSTNAME", "LASTNAME", "ACTIVELEDGERS"}

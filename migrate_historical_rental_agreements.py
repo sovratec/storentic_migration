@@ -69,9 +69,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Required source columns ────────────────────────────────────────────────────
 REQUIRED_COLS = {
-    "TenantID", "sUnitName", "dMovedIn", "dMovedOut",
-    "dLease", "dPaidThru", "dSchedOut",
-    "dcRent", "dcSchedRent", "dcSecDepPaid", "dcInsurPremium",
+    "TENANTID", "SUNITNAME", "DMOVEDIN", "DMOVEDOUT",
+    "DLEASE", "DPAIDTHRU", "DSCHEDOUT",
+    "DCRENT", "DCSCHEDRENT", "DCSECDEPPAID", "DCINSURPREMIUM",
 }
 
 
@@ -197,62 +197,62 @@ def transform_row(excel_row: int, row: pd.Series,
                   facility_id: int, created_by: int) -> dict | None:
 
     # ── customer_id ───────────────────────────────────────────────────────────
-    tenant_id   = str(row.get("TenantID") or "").strip().split(".")[0]
+    tenant_id   = str(row.get("TENANTID") or "").strip().split(".")[0]
     customer_id = customer_map.get(tenant_id)
     if not customer_id:
-        log_skipped(excel_row, tenant_id, "TenantID",
+        log_skipped(excel_row, tenant_id, "TENANTID",
                     f"customer not found for TenantID={tenant_id!r}", tenant_id)
         return None
 
     # ── unit_id ───────────────────────────────────────────────────────────────
-    unit_name = str(row.get("sUnitName") or "").strip()
+    unit_name = str(row.get("SUNITNAME") or "").strip()
     unit_id   = unit_map.get(unit_name)
     if not unit_id:
-        log_skipped(excel_row, unit_name, "sUnitName",
+        log_skipped(excel_row, unit_name, "SUNITNAME",
                     f"unit not found for sUnitName={unit_name!r}", unit_name)
         return None
 
     # ── dMovedIn (required) ───────────────────────────────────────────────────
-    move_in_date = T.parse_date(row.get("dMovedIn"))
+    move_in_date = T.parse_date(row.get("DMOVEDIN"))
     if move_in_date is None:
-        log_skipped(excel_row, unit_name, "dMovedIn",
+        log_skipped(excel_row, unit_name, "DMOVEDIN",
                     "dMovedIn is null — move_in_date and charge_day are required",
-                    row.get("dMovedIn"))
+                    row.get("DMOVEDIN"))
         return None
 
     # ── dMovedOut (required — filter guarantees this) ─────────────────────────
-    move_out_date = T.parse_date(row.get("dMovedOut"))
+    move_out_date = T.parse_date(row.get("DMOVEDOUT"))
     if move_out_date is None:
-        log_skipped(excel_row, unit_name, "dMovedOut",
+        log_skipped(excel_row, unit_name, "DMOVEDOUT",
                     "dMovedOut is null — row should have been filtered out",
-                    row.get("dMovedOut"))
+                    row.get("DMOVEDOUT"))
         return None
 
     # ── dPaidThru (required) ─────────────────────────────────────────────────
-    paid_through_date = T.parse_date(row.get("dPaidThru"))
+    paid_through_date = T.parse_date(row.get("DPAIDTHRU"))
     if paid_through_date is None:
-        log_skipped(excel_row, unit_name, "dPaidThru",
+        log_skipped(excel_row, unit_name, "DPAIDTHRU",
                     "dPaidThru is null — paid_through_date is required",
-                    row.get("dPaidThru"))
+                    row.get("DPAIDTHRU"))
         return None
 
     # ── dcRent (required) ─────────────────────────────────────────────────────
-    rent_raw = row.get("dcRent")
+    rent_raw = row.get("DCRENT")
     if rent_raw is None or str(rent_raw).strip().lower() in ("nan", "none", ""):
-        log_skipped(excel_row, unit_name, "dcRent",
+        log_skipped(excel_row, unit_name, "DCRENT",
                     "dcRent is null — rental_rate_in_cents is required", rent_raw)
         return None
     rental_rate_in_cents = T.to_cents(rent_raw)
 
     # ── optional fields ───────────────────────────────────────────────────────
-    lease_date   = T.parse_date(row.get("dLease")) or move_in_date
-    schedule_date = T.parse_date(row.get("dSchedOut")) or move_in_date
+    lease_date   = T.parse_date(row.get("DLEASE")) or move_in_date
+    schedule_date = T.parse_date(row.get("DSCHEDOUT")) or move_in_date
 
-    schedule_rate_in_cents = T.to_cents(row.get("dcSchedRent"))
+    schedule_rate_in_cents = T.to_cents(row.get("DCSCHEDRENT"))
     if schedule_rate_in_cents == 0:
         schedule_rate_in_cents = rental_rate_in_cents
 
-    insurance_rate_in_cents = T.to_cents(row.get("dcInsurPremium"))
+    insurance_rate_in_cents = T.to_cents(row.get("DCINSURPREMIUM"))
     insurance_option        = T.derive_insurance_option(insurance_rate_in_cents)
 
     now = datetime.utcnow()
@@ -269,7 +269,7 @@ def transform_row(excel_row: int, row: pd.Series,
         "rental_rate_in_cents":       rental_rate_in_cents,
         "schedule_rate_in_cents":     schedule_rate_in_cents,
         "rate_variance_in_cents":     0,
-        "security_deposit_in_cents":  T.to_cents(row.get("dcSecDepPaid")),
+        "security_deposit_in_cents":  T.to_cents(row.get("DCSECDEPPAID")),
         "insurance_option":           insurance_option,
         "insurance_rate_in_cents":    insurance_rate_in_cents,
         "charge_day":                 T.derive_charge_day(move_in_date),
@@ -371,15 +371,15 @@ def main(args=None):
     logger.info(f"📂  Loading source file: {args.file}")
     df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
     df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
-    df_raw.columns = df_raw.columns.str.strip()
+    df_raw.columns = df_raw.columns.str.strip().str.upper()
 
     missing = REQUIRED_COLS - set(df_raw.columns)
     if missing:
         print(f"\n❌  Missing required columns: {missing}\n", flush=True)
         sys.exit(1)
 
-    df = df_raw[df_raw["dMovedOut"].notna()].copy()
-    df = df[df["dMovedOut"].astype(str).str.strip().str.lower() != "nat"].copy()
+    df = df_raw[df_raw["DMOVEDOUT"].notna()].copy()
+    df = df[df["DMOVEDOUT"].astype(str).str.strip().str.lower() != "nat"].copy()
 
     print(
         f"\n  Source rows total                : {len(df_raw):,}"

@@ -16,91 +16,91 @@ import os
 
 # Short alias -> actual Excel column header (partial match key)
 REQUIRED_COLUMN_KEYS = [
-    "UnitName",
-    "Bldg",
-    "Type",
-    "Entry Location",
-    "Unit Access",
-    "Floor",
-    "Power (Yes",
-    "Power_ElectricalOutlet",
-    "Power_Lights",
-    "Power_Timer_Hr",
-    "Unit Access Hours",
-    "EntryLock",
-    "DoorType",
-    "Alarm",
+    "UNITNAME",
+    "BLDG",
+    "TYPE",
+    "ENTRY LOCATION",
+    "UNIT ACCESS",
+    "FLOOR",
+    "POWER (YES",
+    "POWER_ELECTRICALOUTLET",
+    "POWER_LIGHTS",
+    "POWER_TIMER_HR",
+    "UNIT ACCESS HOURS",
+    "ENTRYLOCK",
+    "DOORTYPE",
+    "ALARM",
     "ADA",
-    "Area",
-    "UnitSize",
-    "StandardRate",
-    "PushRate",
-    "WeeklyRate",
-    "Rentable",
-    "Rented",
-    "Maintenance",
-    "Reserved",
-    "On-Site Resident",
-    "Box Truck Rental",
-    "Mobile Unit",
+    "AREA",
+    "UNITSIZE",
+    "STANDARDRATE",
+    "PUSHRATE",
+    "WEEKLYRATE",
+    "RENTABLE",
+    "RENTED",
+    "MAINTENANCE",
+    "RESERVED",
+    "ON-SITE RESIDENT",
+    "BOX TRUCK RENTAL",
+    "MOBILE UNIT",
 ]
 
 REQUIRED_CUSTOMER_COLUMN_KEYS = [
-    "TenantId",      # → external_id
-    "sFname",         # → first_name (prefix)
-    "sMI",            # → first_name (middle initial, optional)
-    "sLname",         # → last_name
-    "sCompany",       # → company_name
-    "sAddr1",         # → address1
-    "sAddr2",         # → address2
-    "sCity",          # → city
-    "sRegion",        # → state
-    "sPostalCode",    # → zip
-    "sCountry",       # → country (new column)
-    "sPhone",         # → phone
-    "sFNameAlt",      # → alternate_first_name (prefix)
-    "sMIAlt",         # → alternate_first_name (middle initial, optional)
-    "sLnameAlt",      # → alternate_last_name
-    "sAddr1Alt",      # → alternate_address1
-    "sAddr2Alt",      # → alternate_address2
-    "sCityAlt",       # → alternate_city
-    "sRegionAlt",     # → alternate_state
-    "sPostalCodeAlt", # → alternate_zip
-    "sCountryAlt",    # → alternate_country (new column)
-    "sPhoneAlt",      # → alternate_phone
-    "sEmail",         # → email
-    "sEmailAlt",      # → alternate_email
-    "sMobile",        # → mobile (new column)
-    "sAccessCode",    # → access_gate_code
-    "sLicense",       # → driver_license_id
-    "sLicRegion",     # → driver_license_issue_state
+    "TENANTID",      # → external_id
+    "SFNAME",         # → first_name (prefix)
+    "SMI",            # → first_name (middle initial, optional)
+    "SLNAME",         # → last_name
+    "SCOMPANY",       # → company_name
+    "SADDR1",         # → address1
+    "SADDR2",         # → address2
+    "SCITY",          # → city
+    "SREGION",        # → state
+    "SPOSTALCODE",    # → zip
+    "SCOUNTRY",       # → country (new column)
+    "SPHONE",         # → phone
+    "SFNAMEALT",      # → alternate_first_name (prefix)
+    "SMIALT",         # → alternate_first_name (middle initial, optional)
+    "SLNAMEALT",      # → alternate_last_name
+    "SADDR1ALT",      # → alternate_address1
+    "SADDR2ALT",      # → alternate_address2
+    "SCITYALT",       # → alternate_city
+    "SREGIONALT",     # → alternate_state
+    "SPOSTALCODEALT", # → alternate_zip
+    "SCOUNTRYALT",    # → alternate_country (new column)
+    "SPHONEALT",      # → alternate_phone
+    "SEMAIL",         # → email
+    "SEMAILALT",      # → alternate_email
+    "SMOBILE",        # → mobile (new column)
+    "SACCESSCODE",    # → access_gate_code
+    "SLICENSE",       # → driver_license_id
+    "SLICREGION",     # → driver_license_issue_state
 ]
 
 REQUIRED_CUSTOMER_UNIT_COLUMN_KEYS = [
-    "TenantId",      # FK → storentic.customer.external_id
-    "sUnitName",     # FK → storentic.units.unit_number  (scoped to LOCATION_ID)
-    "dMovedIn",      # Required — drives charge_day derivation and lease_date fallback
-    "dLease",        # → lease_date  (falls back to dMovedIn if null)
-    "dPaidThru",     # → paid_through_date
-    "dMovedOut",     # → move_out_date  (NULL for all 377 active rows)
-    "dSchedOut",     # → scheduled_date (NULL for all 377 active rows)
-    "dcRent",        # → rental_rate  (required; stored as DECIMAL dollars)
-    "dcSchedRent",   # → scheduled_rate (copies rental_rate if 0 or null)
-    "sAccessCode",   # → access_code  (truncated to 10 characters)
+    "TENANTID",      # FK → storentic.customer.external_id
+    "SUNITNAME",     # FK → storentic.units.unit_number  (scoped to LOCATION_ID)
+    "DMOVEDIN",      # Required — drives charge_day derivation and lease_date fallback
+    "DLEASE",        # → lease_date  (falls back to dMovedIn if null)
+    "DPAIDTHRU",     # → paid_through_date
+    "DMOVEDOUT",     # → move_out_date  (NULL for all 377 active rows)
+    "DSCHEDOUT",     # → scheduled_date (NULL for all 377 active rows)
+    "DCRENT",        # → rental_rate  (required; stored as DECIMAL dollars)
+    "DCSCHEDRENT",   # → scheduled_rate (copies rental_rate if 0 or null)
+    "SACCESSCODE",   # → access_code  (truncated to 10 characters)
 ]
 
 REQUIRED_RENTAL_AGREEMENT_COLUMN_KEYS = [
-    "TenantId",        # FK → storentic.customer.external_id
-    "sUnitName",       # FK → storentic.units.unit_number  (scoped to LOCATION_ID)
-    "dMovedIn",        # Required — drives move_in_date and charge_day
-    "dLease",          # → lease_date  (falls back to dMovedIn if null)
-    "dPaidThru",       # → paid_through_date  (required)
-    "dMovedOut",       # → move_out_date  (NULL for all 377 active rows)
-    "dSchedOut",       # → schedule_date  (falls back to dMovedIn if null)
-    "dcRent",          # → rental_rate_in_cents  (required; dollars × 100)
-    "dcSchedRent",     # → schedule_rate_in_cents  (copies rental_rate if 0 or null)
-    "dcSecDepPaid",    # → security_deposit_in_cents  (dollars × 100; 0 if null)
-    "dcInsurPremium",  # → insurance_rate_in_cents + insurance_option  (0/NONE if null)
+    "TENANTID",        # FK → storentic.customer.external_id
+    "SUNITNAME",       # FK → storentic.units.unit_number  (scoped to LOCATION_ID)
+    "DMOVEDIN",        # Required — drives move_in_date and charge_day
+    "DLEASE",          # → lease_date  (falls back to dMovedIn if null)
+    "DPAIDTHRU",       # → paid_through_date  (required)
+    "DMOVEDOUT",       # → move_out_date  (NULL for all 377 active rows)
+    "DSCHEDOUT",       # → schedule_date  (falls back to dMovedIn if null)
+    "DCRENT",          # → rental_rate_in_cents  (required; dollars × 100)
+    "DCSCHEDRENT",     # → schedule_rate_in_cents  (copies rental_rate if 0 or null)
+    "DCSECDEPPAID",    # → security_deposit_in_cents  (dollars × 100; 0 if null)
+    "DCINSURPREMIUM",  # → insurance_rate_in_cents + insurance_option  (0/NONE if null)
 ]
 
 IGNORED_COLUMNS = ["Width", "Length", "Zone", "Climate", "SecurityDeposit"]
@@ -137,6 +137,7 @@ def validate(filepath: str, mode: str = "unit") -> tuple[pd.DataFrame, dict]:
     logger.info(f"    Migration mode : {mode.upper()}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
+    df.columns = df.columns.str.strip().str.upper()
 
     # Strip whitespace from all string values
     df = df.apply(lambda col: col.str.strip() if col.dtype == "object" else col)

@@ -149,11 +149,11 @@ def build_ledger_to_tenant_map(tenants_file: str) -> dict[int, int]:
     logger.info(f"📂  Loading tenants file: {tenants_file}")
     df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
 
-    if "LedgerID" not in df.columns or "TenantID" not in df.columns:
+    if "LEDGERID" not in df.columns or "TENANTID" not in df.columns:
         raise SystemExit(
-            "❌  Tenants file must contain both 'TenantID' and 'LedgerID' columns.\n"
+            "❌  Tenants file must contain both 'TENANTID' and 'LEDGERID' columns.\n"
             f"    Found: {list(df.columns[:20])}"
         )
 
@@ -161,8 +161,8 @@ def build_ledger_to_tenant_map(tenants_file: str) -> dict[int, int]:
     skipped = 0
     for _, row in df.iterrows():
         try:
-            ledger_id = int(float(row["LedgerID"]))
-            tenant_id = int(float(row["TenantID"]))
+            ledger_id = int(float(row["LEDGERID"]))
+            tenant_id = int(float(row["TENANTID"]))
             ledger_to_tenant[ledger_id] = tenant_id
         except (ValueError, TypeError):
             skipped += 1
@@ -324,7 +324,7 @@ def process_payments(
     """
     logger.info(f"📂  Loading payments file: {payments_file}")
     df = pd.read_csv(payments_file, dtype=str, low_memory=False, encoding='latin-1')
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     logger.info(f"    Total payment rows: {len(df)}")
     print(f"  Processing {len(df):,} rows — progress every 10,000 rows  (full detail in log file)\n", flush=True)
 
@@ -393,27 +393,27 @@ def process_payments(
         stats["total"] += 1
 
         # ── Resolve LedgerID → customer_id ───────────────────────────────────
-        raw_ledger = row.get("LedgerID")
+        raw_ledger = row.get("LEDGERID")
         try:
             ledger_id = int(float(raw_ledger))
         except (ValueError, TypeError):
-            log_error(row_idx + 2, row.get("PaymentID"), "LedgerID", "Cannot parse LedgerID", raw_ledger)
+            log_error(row_idx + 2, row.get("PAYMENTID"), "LEDGERID", "Cannot parse LedgerID", raw_ledger)
             stats["errors"] += 1
             continue
 
         customer_id = ledger_to_customer.get(ledger_id)
         if customer_id is None:
-            log_skipped(row_idx + 2, row.get("PaymentID"), "LedgerID",
+            log_skipped(row_idx + 2, row.get("PAYMENTID"), "LEDGERID",
                         f"LedgerID {ledger_id} has no matching customer", ledger_id)
             stats["skipped_no_cust"] += 1
             continue
 
         # ── Deduplication: skip if already imported ───────────────────────────
-        raw_payment_id = row.get("PaymentID")
+        raw_payment_id = row.get("PAYMENTID")
         try:
             ext_id = PT.derive_external_id(raw_payment_id)
         except (ValueError, TypeError):
-            log_error(row_idx + 2, raw_payment_id, "PaymentID", "Cannot parse PaymentID", raw_payment_id)
+            log_error(row_idx + 2, raw_payment_id, "PAYMENTID", "Cannot parse PaymentID", raw_payment_id)
             stats["errors"] += 1
             continue
 

@@ -111,7 +111,7 @@ _INSERT_COLS = [
     "external_invoice_id",
 ]
 
-SKIPPED_COLUMNS = ["InvoiceID", "iInvoiceNum", "ChargeIDs", "skip_reason"]
+SKIPPED_COLUMNS = ["INVOICEID", "IINVOICENUM", "ChargeIDs", "skip_reason"]
 
 
 # =============================================================================
@@ -191,19 +191,19 @@ def load_invoices_file(filepath: str) -> pd.DataFrame:
     """
     logger.info(f"Loading invoices file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
-    required = {"InvoiceID", "iInvoiceNum", "ChargeID", "dInvoiced", "dDue"}
+    required = {"INVOICEID", "IINVOICENUM", "CHARGEID", "DINVOICED", "DDUE"}
     missing  = required - set(df.columns)
     if missing:
         raise SystemExit(f"❌  Invoices file missing columns: {missing}")
 
     # Drop summary/blank rows
-    df = df[df["InvoiceID"].notna() & (df["InvoiceID"].str.strip() != "")].copy()
+    df = df[df["INVOICEID"].notna() & (df["INVOICEID"].str.strip() != "")].copy()
     df = df.reset_index(drop=True)
     logger.info(f"    Detail rows      : {len(df):,}")
-    logger.info(f"    Unique invoices  : {df['InvoiceID'].nunique():,}")
+    logger.info(f"    Unique invoices  : {df['INVOICEID'].nunique():,}")
     return df
 
 
@@ -215,19 +215,19 @@ def load_payments_file(filepath: str) -> dict[str, int]:
     """
     logger.info(f"Loading payments file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, low_memory=False)
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
     today = datetime.utcnow().date()
 
     payment_map: dict[str, int] = {}
     skipped = 0
 
     for _, row in df.iterrows():
-        charge_id = _clean_id(row.get("ChargeID", ""))
+        charge_id = _clean_id(row.get("CHARGEID", ""))
         if not charge_id:
             continue
 
-        d_pmt_raw  = row.get("dPmt", "")
-        dc_pmt_amt = row.get("dcPmtAmt", "")
+        d_pmt_raw  = row.get("DPMT", "")
+        dc_pmt_amt = row.get("DCPMTAMT", "")
 
         d_pmt = _parse_dt(d_pmt_raw)
         if d_pmt is None or d_pmt.date() > today:
@@ -344,7 +344,7 @@ def build_invoice_records(
     records = []
     skipped = []
 
-    grouped = df.groupby("InvoiceID", sort=False)
+    grouped = df.groupby("INVOICEID", sort=False)
     logger.info(f"    Building records for {grouped.ngroups:,} unique invoices ...")
 
     for invoice_id_raw, group in grouped:
@@ -355,36 +355,36 @@ def build_invoice_records(
 
         first = group.iloc[0]
 
-        invoice_num = _clean_id(first.get("iInvoiceNum"))
-        issue_date  = _parse_date(first.get("dInvoiced"))
-        due_date    = _parse_date(first.get("dDue"))
+        invoice_num = _clean_id(first.get("IINVOICENUM"))
+        issue_date  = _parse_date(first.get("DINVOICED"))
+        due_date    = _parse_date(first.get("DDUE"))
 
         if not invoice_num:
-            skipped.append({"InvoiceID": invoice_id, "skip_reason": "iInvoiceNum is blank"})
-            log_skipped(0, invoice_id, "iInvoiceNum", "iInvoiceNum is blank")
+            skipped.append({"INVOICEID": invoice_id, "skip_reason": "iInvoiceNum is blank"})
+            log_skipped(0, invoice_id, "IINVOICENUM", "iInvoiceNum is blank")
             continue
         if issue_date is None:
-            skipped.append({"InvoiceID": invoice_id, "iInvoiceNum": invoice_num,
+            skipped.append({"INVOICEID": invoice_id, "IINVOICENUM": invoice_num,
                              "skip_reason": "dInvoiced missing or unparseable"})
-            log_skipped(0, invoice_id, "dInvoiced", "dInvoiced missing or unparseable")
+            log_skipped(0, invoice_id, "DINVOICED", "dInvoiced missing or unparseable")
             continue
         if due_date is None:
-            skipped.append({"InvoiceID": invoice_id, "iInvoiceNum": invoice_num,
+            skipped.append({"INVOICEID": invoice_id, "IINVOICENUM": invoice_num,
                              "skip_reason": "dDue missing or unparseable"})
-            log_skipped(0, invoice_id, "dDue", "dDue missing or unparseable")
+            log_skipped(0, invoice_id, "DDUE", "dDue missing or unparseable")
             continue
 
         # All ChargeIDs for this invoice
         charge_ids = [
             cid for cid in (
-                _clean_id(v) for v in group["ChargeID"].dropna()
+                _clean_id(v) for v in group["CHARGEID"].dropna()
             ) if cid
         ]
 
         if not charge_ids:
-            skipped.append({"InvoiceID": invoice_id, "iInvoiceNum": invoice_num,
+            skipped.append({"INVOICEID": invoice_id, "IINVOICENUM": invoice_num,
                              "skip_reason": "No valid ChargeIDs in detail rows"})
-            log_skipped(0, invoice_id, "ChargeID", "No valid ChargeIDs in detail rows")
+            log_skipped(0, invoice_id, "CHARGEID", "No valid ChargeIDs in detail rows")
             continue
 
         # Resolve customer_id and charge_type_id from first matched charge in DB
@@ -400,12 +400,12 @@ def build_invoice_records(
         if customer_id is None:
             reason = "No ChargeID matched storentic.ledger_charges.external_charge_id"
             skipped.append({
-                "InvoiceID":   invoice_id,
-                "iInvoiceNum": invoice_num,
+                "INVOICEID":   invoice_id,
+                "IINVOICENUM": invoice_num,
                 "ChargeIDs":   ",".join(charge_ids),
                 "skip_reason": reason,
             })
-            log_skipped(0, invoice_id, "ChargeID", reason, ",".join(charge_ids))
+            log_skipped(0, invoice_id, "CHARGEID", reason, ",".join(charge_ids))
             continue
 
         status, total_cents, paid_cents = _derive_status(charge_ids, charge_map, payment_map)

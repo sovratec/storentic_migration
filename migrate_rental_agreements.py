@@ -71,17 +71,17 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ── Column short-key constants ─────────────────────────────────────────────────
 # Must match the keys in REQUIRED_RENTAL_AGREEMENT_COLUMN_KEYS in validator.py.
 
-COL_TENANT_ID  = "TenantId"
-COL_UNIT_NAME  = "sUnitName"
-COL_MOVED_IN   = "dMovedIn"
-COL_LEASE      = "dLease"
-COL_PAID_THRU  = "dPaidThru"
-COL_MOVED_OUT  = "dMovedOut"
-COL_SCHED_OUT  = "dSchedOut"
-COL_RENT       = "dcRent"
-COL_SCHED_RENT = "dcSchedRent"
-COL_SEC_DEP    = "dcSecDepPaid"
-COL_INSUR_PREM = "dcInsurPremium"
+COL_TENANT_ID  = "TENANTID"
+COL_UNIT_NAME  = "SUNITNAME"
+COL_MOVED_IN   = "DMOVEDIN"
+COL_LEASE      = "DLEASE"
+COL_PAID_THRU  = "DPAIDTHRU"
+COL_MOVED_OUT  = "DMOVEDOUT"
+COL_SCHED_OUT  = "DSCHEDOUT"
+COL_RENT       = "DCRENT"
+COL_SCHED_RENT = "DCSCHEDRENT"
+COL_SEC_DEP    = "DCSECDEPPAID"
+COL_INSUR_PREM = "DCINSURPREMIUM"
 
 
 # ── Lookup caches ──────────────────────────────────────────────────────────────

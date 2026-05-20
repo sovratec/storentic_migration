@@ -203,15 +203,15 @@ def transform_row(
     Raises:
         ValueError if any critical field cannot be transformed.
     """
-    payment_id  = row.get("PaymentID")
-    ledger_id   = row.get("LedgerID")
+    payment_id  = row.get("PAYMENTID")
+    ledger_id   = row.get("LEDGERID")
     pmt_type_id = row.get("PmtTypeID")
-    dc_pmt_amt  = row.get("dcPmtAmt")
-    d_pmt       = row.get("dPmt")
-    d_created   = row.get("dCreated")
+    dc_pmt_amt  = row.get("DCPMTAMT")
+    d_pmt       = row.get("DPMT")
+    d_created   = row.get("DCREATED")
     s_check_num = row.get("sCheckNum")
-    b_nsf       = row.get("bNSF")
-    d_deleted   = row.get("dDeleted")
+    b_nsf       = row.get("BNSF")
+    d_deleted   = row.get("DDELETED")
     receipt_id  = row.get("ReceiptID")
 
     # ── Parse dates ───────────────────────────────────────────────────────────

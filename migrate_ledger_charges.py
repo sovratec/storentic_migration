@@ -118,8 +118,8 @@ EXCEL_OUTPUT_COLUMNS = [
 ]
 
 SKIPPED_COLUMNS = [
-    "ChargeID", "ChargeDescID", "LedgerID", "dcAmt",
-    "dChgStrt", "dCreated", "skip_reason",
+    "CHARGEID", "CHARGEDESCID", "LEDGERID", "DCAMT",
+    "DCHGSTRT", "DCREATED", "skip_reason",
 ]
 
 
@@ -138,10 +138,10 @@ def load_charge_type_map(charge_types_file: str) -> dict:
 
     mapping = {}
     for _, row in df.iterrows():
-        if pd.isna(row.get("id")) or pd.isna(row.get("ChargeDescID")):
+        if pd.isna(row.get("id")) or pd.isna(row.get("CHARGEDESCID")):
             continue
         try:
-            desc_id = int(float(row["ChargeDescID"]))
+            desc_id = int(float(row["CHARGEDESCID"]))
             ct_id   = int(float(row["id"]))
             mapping[desc_id] = ct_id
         except (ValueError, TypeError):
@@ -159,21 +159,21 @@ def load_charge_desc_map(charge_desc_file: str) -> dict:
     logger.info(f"📂  Loading charge description mapping: {charge_desc_file}")
     df = pd.read_csv(charge_desc_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
 
-    if "ChargeDescID" not in df.columns or "sChgDesc" not in df.columns:
+    if "CHARGEDESCID" not in df.columns or "SCHGDESC" not in df.columns:
         raise SystemExit(
-            f"❌  ChargeDesc file must contain 'ChargeDescID' and 'sChgDesc' columns.\n"
+            f"❌  ChargeDesc file must contain 'CHARGEDESCID' and 'SCHGDESC' columns.\n"
             f"    Found: {list(df.columns[:20])}"
         )
 
     mapping = {}
     for _, row in df.iterrows():
-        if pd.isna(row.get("ChargeDescID")):
+        if pd.isna(row.get("CHARGEDESCID")):
             continue
         try:
-            desc_id = int(float(row["ChargeDescID"]))
-            memo    = str(row["sChgDesc"]).strip() if pd.notna(row.get("sChgDesc")) else None
+            desc_id = int(float(row["CHARGEDESCID"]))
+            memo    = str(row["SCHGDESC"]).strip() if pd.notna(row.get("SCHGDESC")) else None
             mapping[desc_id] = memo
         except (ValueError, TypeError):
             continue
@@ -191,9 +191,9 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
     logger.info(f"📂  Loading tenants file: {tenants_file}")
     df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.upper()
 
-    required = {"LedgerID", "TenantID", "sUnitName"}
+    required = {"LEDGERID", "TENANTID", "SUNITNAME"}
     missing  = required - set(df.columns)
     if missing:
         raise SystemExit(f"❌  Tenants file missing columns: {missing}")
@@ -204,9 +204,9 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
 
     for _, row in df.iterrows():
         try:
-            ledger_id = int(float(row["LedgerID"]))
-            tenant_id = int(float(row["TenantID"]))
-            unit_name = str(row["sUnitName"]).strip() if pd.notna(row["sUnitName"]) else None
+            ledger_id = int(float(row["LEDGERID"]))
+            tenant_id = int(float(row["TENANTID"]))
+            unit_name = str(row["SUNITNAME"]).strip() if pd.notna(row["SUNITNAME"]) else None
             ledger_to_tenant[ledger_id]   = tenant_id
             ledger_to_unitname[ledger_id] = unit_name
         except (ValueError, TypeError):
@@ -346,13 +346,13 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
                   loc_id: int, org_id: int, created_by: int, memo: str = None) -> dict:
     """Transform one Select Charges row into a ledger_charges insert dict."""
 
-    charge_id   = str(int(float(row["ChargeID"])))
-    dc_amt      = row.get("dcAmt")
-    d_chg_strt  = _parse_dt(row.get("dChgStrt"))
-    d_created   = _parse_dt(row.get("dCreated"))
+    charge_id   = str(int(float(row["CHARGEID"])))
+    dc_amt      = row.get("DCAMT")
+    d_chg_strt  = _parse_dt(row.get("DCHGSTRT"))
+    d_created   = _parse_dt(row.get("DCREATED"))
     d_updated   = _parse_dt(row.get("dUpdated"))
-    d_deleted   = _parse_dt(row.get("dDeleted"))
-    b_nsf       = bool(row.get("bNSF", False))
+    d_deleted   = _parse_dt(row.get("DDELETED"))
+    b_nsf       = bool(row.get("BNSF", False))
     now         = datetime.utcnow()
 
     # Status logic
@@ -424,8 +424,8 @@ def process_charges(
     logger.info(f"📂  Loading charges file: {charges_file}")
     df = pd.read_csv(charges_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip()
-    df = df[df["ChargeID"].notna() & (df["ChargeID"].str.strip() != "")].copy()
+    df.columns = df.columns.str.strip().str.upper()
+    df = df[df["CHARGEID"].notna() & (df["CHARGEID"].str.strip() != "")].copy()
     logger.info(f"    Charge rows to process: {len(df):,}")
     print(f"\n  Processing {len(df):,} rows — batch size {batch_size:,}\n", flush=True)
 
@@ -488,11 +488,11 @@ def process_charges(
 
         # ── Parse key IDs ─────────────────────────────────────────────────────
         try:
-            charge_id      = str(int(row["ChargeID"]))
-            charge_desc_id = int(row["ChargeDescID"])
-            ledger_id      = int(row["LedgerID"])
+            charge_id      = str(int(row["CHARGEID"]))
+            charge_desc_id = int(row["CHARGEDESCID"])
+            ledger_id      = int(row["LEDGERID"])
         except (ValueError, TypeError) as exc:
-            log_error(excel_row, row.get("ChargeID"), "PARSE", str(exc), row.get("ChargeID"))
+            log_error(excel_row, row.get("CHARGEID"), "PARSE", str(exc), row.get("CHARGEID"))
             stats["errors"] += 1
             continue
 
@@ -506,12 +506,12 @@ def process_charges(
         if charge_type_id is None:
             reason = f"ChargeDescID {charge_desc_id} not in charge_type mapping"
             skipped_rows.append({
-                "ChargeID": charge_id, "ChargeDescID": charge_desc_id,
-                "LedgerID": ledger_id, "dcAmt": row.get("dcAmt"),
-                "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
+                "CHARGEID": charge_id, "CHARGEDESCID": charge_desc_id,
+                "LEDGERID": ledger_id, "DCAMT": row.get("DCAMT"),
+                "DCHGSTRT": row.get("DCHGSTRT"), "DCREATED": row.get("DCREATED"),
                 "skip_reason": reason,
             })
-            log_skipped(excel_row, charge_id, "ChargeDescID", reason, charge_desc_id)
+            log_skipped(excel_row, charge_id, "CHARGEDESCID", reason, charge_desc_id)
             stats["skipped_no_ct"] += 1
             continue
 
@@ -521,12 +521,12 @@ def process_charges(
         if customer_id is None:
             reason = f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer"
             skipped_rows.append({
-                "ChargeID": charge_id, "ChargeDescID": charge_desc_id,
-                "LedgerID": ledger_id, "dcAmt": row.get("dcAmt"),
-                "dChgStrt": row.get("dChgStrt"), "dCreated": row.get("dCreated"),
+                "CHARGEID": charge_id, "CHARGEDESCID": charge_desc_id,
+                "LEDGERID": ledger_id, "DCAMT": row.get("DCAMT"),
+                "DCHGSTRT": row.get("DCHGSTRT"), "DCREATED": row.get("DCREATED"),
                 "skip_reason": reason,
             })
-            log_skipped(excel_row, charge_id, "LedgerID", reason, ledger_id)
+            log_skipped(excel_row, charge_id, "LEDGERID", reason, ledger_id)
             stats["skipped_no_cust"] += 1
             continue
 

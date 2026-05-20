@@ -62,9 +62,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Required source columns ────────────────────────────────────────────────────
 REQUIRED_COLS = {
-    "TenantID", "sUnitName", "dMovedIn", "dMovedOut",
-    "dLease", "dPaidThru", "dSchedOut", "dcRent",
-    "dcSchedRent", "sAccessCode",
+    "TENANTID", "SUNITNAME", "DMOVEDIN", "DMOVEDOUT",
+    "DLEASE", "DPAIDTHRU", "DSCHEDOUT", "DCRENT",
+    "DCSCHEDRENT", "SACCESSCODE",
 }
 
 
@@ -194,52 +194,52 @@ def transform_row(excel_row: int, row: pd.Series,
                   created_by: int) -> dict | None:
 
     # ── customer_id ───────────────────────────────────────────────────────────
-    tenant_id   = str(row.get("TenantID") or "").strip().split(".")[0]
+    tenant_id   = str(row.get("TENANTID") or "").strip().split(".")[0]
     customer_id = customer_map.get(tenant_id)
     if not customer_id:
-        log_skipped(excel_row, tenant_id, "TenantID",
+        log_skipped(excel_row, tenant_id, "TENANTID",
                     f"customer not found for TenantID={tenant_id!r}", tenant_id)
         return None
 
     # ── unit_id ───────────────────────────────────────────────────────────────
-    unit_name = str(row.get("sUnitName") or "").strip()
+    unit_name = str(row.get("SUNITNAME") or "").strip()
     unit_id   = unit_map.get(unit_name)
     if not unit_id:
-        log_skipped(excel_row, unit_name, "sUnitName",
+        log_skipped(excel_row, unit_name, "SUNITNAME",
                     f"unit not found for sUnitName={unit_name!r}", unit_name)
         return None
 
     # ── dMovedIn (required — drives lease_date fallback and charge_day) ───────
-    move_in_date = _parse_date(row.get("dMovedIn"))
+    move_in_date = _parse_date(row.get("DMOVEDIN"))
     if move_in_date is None:
-        log_skipped(excel_row, unit_name, "dMovedIn",
-                    "dMovedIn is null — charge_day cannot be derived", row.get("dMovedIn"))
+        log_skipped(excel_row, unit_name, "DMOVEDIN",
+                    "dMovedIn is null — charge_day cannot be derived", row.get("DMOVEDIN"))
         return None
 
     # ── dMovedOut (required for historical rows — filter guarantees it) ───────
-    move_out_date = _parse_date(row.get("dMovedOut"))
+    move_out_date = _parse_date(row.get("DMOVEDOUT"))
     if move_out_date is None:
-        log_skipped(excel_row, unit_name, "dMovedOut",
-                    "dMovedOut is null — row should have been filtered out", row.get("dMovedOut"))
+        log_skipped(excel_row, unit_name, "DMOVEDOUT",
+                    "dMovedOut is null — row should have been filtered out", row.get("DMOVEDOUT"))
         return None
 
     # ── dcRent (required) ─────────────────────────────────────────────────────
-    rent_raw = row.get("dcRent")
+    rent_raw = row.get("DCRENT")
     if rent_raw is None or str(rent_raw).strip().lower() in ("nan", "none", ""):
-        log_skipped(excel_row, unit_name, "dcRent",
+        log_skipped(excel_row, unit_name, "DCRENT",
                     "dcRent is null — rental_rate is required", rent_raw)
         return None
     rental_rate = _safe_decimal(rent_raw)
 
     # ── optional fields with safe defaults ───────────────────────────────────
-    lease_date      = _parse_date(row.get("dLease")) or move_in_date
-    paid_thru       = _parse_date(row.get("dPaidThru"))
-    sched_date      = _parse_date(row.get("dSchedOut"))
-    scheduled_rate  = _safe_decimal(row.get("dcSchedRent"))
+    lease_date      = _parse_date(row.get("DLEASE")) or move_in_date
+    paid_thru       = _parse_date(row.get("DPAIDTHRU"))
+    sched_date      = _parse_date(row.get("DSCHEDOUT"))
+    scheduled_rate  = _safe_decimal(row.get("DCSCHEDRENT"))
     if scheduled_rate == Decimal("0.00"):
         scheduled_rate = rental_rate
 
-    raw_access = str(row.get("sAccessCode") or "").strip()
+    raw_access = str(row.get("SACCESSCODE") or "").strip()
     access_code = raw_access[:10] if raw_access else None
 
     now = datetime.utcnow()
@@ -350,15 +350,15 @@ def main(args=None):
     logger.info(f"📂  Loading source file: {args.file}")
     df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
     df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
-    df_raw.columns = df_raw.columns.str.strip()
+    df_raw.columns = df_raw.columns.str.strip().str.upper()
 
     missing = REQUIRED_COLS - set(df_raw.columns)
     if missing:
         print(f"\n❌  Missing required columns: {missing}\n", flush=True)
         sys.exit(1)
 
-    df = df_raw[df_raw["dMovedOut"].notna()].copy()
-    df = df[df["dMovedOut"].astype(str).str.strip().str.lower() != "nat"].copy()
+    df = df_raw[df_raw["DMOVEDOUT"].notna()].copy()
+    df = df[df["DMOVEDOUT"].astype(str).str.strip().str.lower() != "nat"].copy()
 
     print(
         f"\n  Source rows total            : {len(df_raw):,}"
