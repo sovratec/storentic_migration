@@ -55,7 +55,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
-from scripts.utils import normalize_columns
 from scripts import customer_transformer as T
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -142,10 +141,6 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
-    df = normalize_columns(df, ["FIRSTNAME", "MI", "LASTNAME", "COMPANY", "ADDRESS1",
-                                 "ADDRESS2", "CITY", "STATE", "ZIPCODE", "EMAIL",
-                                 "PHONE", "MOBILE", "GATECODE", "DATEMOVEDIN",
-                                 "DATEMOVEDOUT", "ACTIVELEDGERS", "TenantId"])
     df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
 
     required = {"FIRSTNAME", "LASTNAME", "ACTIVELEDGERS"}

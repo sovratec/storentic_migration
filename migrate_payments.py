@@ -62,7 +62,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
-from scripts.utils import normalize_columns
 from scripts import payment_transformer as PT
 
 # ── Output directory ───────────────────────────────────────────────────────────
@@ -151,7 +150,6 @@ def build_ledger_to_tenant_map(tenants_file: str) -> dict[int, int]:
     df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip()
-    df = normalize_columns(df, ["LedgerID", "TenantID"])
 
     if "LedgerID" not in df.columns or "TenantID" not in df.columns:
         raise SystemExit(
@@ -327,8 +325,6 @@ def process_payments(
     logger.info(f"📂  Loading payments file: {payments_file}")
     df = pd.read_csv(payments_file, dtype=str, low_memory=False, encoding='latin-1')
     df.columns = df.columns.str.strip()
-    df = normalize_columns(df, ["PaymentID", "LedgerID", "dcPmtAmt", "dPmt", "sPayType",
-                                 "sComment", "iCheckNum", "bNSF", "dDeleted"])
     logger.info(f"    Total payment rows: {len(df)}")
     print(f"  Processing {len(df):,} rows — progress every 10,000 rows  (full detail in log file)\n", flush=True)
 

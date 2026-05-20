@@ -81,7 +81,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
-from scripts.utils import normalize_columns
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -194,7 +193,6 @@ def load_invoices_file(filepath: str) -> pd.DataFrame:
     df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
     df.columns = df.columns.str.strip()
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df = normalize_columns(df, ["InvoiceID", "iInvoiceNum", "dInvoiced", "dDue", "ChargeID"])
 
     required = {"InvoiceID", "iInvoiceNum", "ChargeID", "dInvoiced", "dDue"}
     missing  = required - set(df.columns)
@@ -218,7 +216,6 @@ def load_payments_file(filepath: str) -> dict[str, int]:
     logger.info(f"Loading payments file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, low_memory=False)
     df.columns = df.columns.str.strip()
-    df = normalize_columns(df, ["ChargeID", "dcPmtAmt", "dPmt"])
     today = datetime.utcnow().date()
 
     payment_map: dict[str, int] = {}
