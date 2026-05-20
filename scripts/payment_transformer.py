@@ -205,14 +205,14 @@ def transform_row(
     """
     payment_id  = row.get("PAYMENTID")
     ledger_id   = row.get("LEDGERID")
-    pmt_type_id = row.get("PmtTypeID")
+    pmt_type_id = row.get("PMTTYPEID")
     dc_pmt_amt  = row.get("DCPMTAMT")
     d_pmt       = row.get("DPMT")
     d_created   = row.get("DCREATED")
-    s_check_num = row.get("sCheckNum")
+    s_check_num = row.get("SCHECKNUM")
     b_nsf       = row.get("BNSF")
     d_deleted   = row.get("DDELETED")
-    receipt_id  = row.get("ReceiptID")
+    receipt_id  = row.get("RECEIPTID")
 
     # ── Parse dates ───────────────────────────────────────────────────────────
     payment_date = parse_date(d_pmt)
