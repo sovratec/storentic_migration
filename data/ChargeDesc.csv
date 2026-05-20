@@ -1,59 +1,57 @@
-Totals & Averages,ChargeDescID,SiteID,ChartOfAcctID,ChgDesc_TermID,sDefChgDesc,sChgDesc,sVendor,sVendorPhone,sReorderPartNum,sChgCategory,bApplyAtMoveIn,bProrateAtMoveIn,bPermanent,dcPrice,dcTax1Rate,dcTax2Rate,dcCost,dcInStock,dcOrderPt,dChgStrt,dChgDisabled,bUseMileageRate,dcMileageRate,iIncludedMiles,sCorpCategory,sBarCode,iPriceType,dcPCRate,dcMinPriceIfPC,bRound,dcRoundTo,dDisabled,dDeleted,dUpdated,uTS
-,763,1495,427,35,Security Deposit,Security Deposit,,,,SecDep,False,False,True,0,0,0,0,0,0,2010-05-12 15:59:13.970000,,False,0,0,,,0,0,0,False,0,2010-05-12 15:59:13.970000,,2020-05-17 03:36:14.207000,System.Byte[]
-,764,1495,431,31,Outstanding Rent Balance,Outstanding Rent Balance,,,,OutRentBal,False,False,True,5,0,0,30,0,0,2011-06-09 15:56:40.813000,,False,0,0,,,0,0,0,False,0,2007-02-15 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,765,1495,431,12,Rent,Rent,,,,Rent,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,766,1495,435,24,Equipment Rental,Equipment Rental,,,,POS,False,False,True,0,0,0,0,1,0,2010-03-24 11:55:45,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,767,1495,438,29,Reservation Fee,Reservation Fee,,,,ReservFee,False,False,True,25,0,0,0,0,0,2018-09-26 11:50:27.047000,,False,0,0,,,0,0,0,False,0,2018-09-26 11:50:27.047000,,2020-05-17 03:36:14.207000,System.Byte[]
-,768,1495,438,30,Invoice Fee,Invoice Fee,,,,InvoiceFee,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,769,1495,438,36,Lock Cut Fee,Lock Cut Fee,,,,LockCutFee,False,False,True,50,0,0,0,0,0,2016-01-02 11:15:35.990000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,770,1495,438,33,Damages and Repairs,Damages and Repairs,,,,Damages,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,771,1495,438,34,Auction Fee,Auction Fee,,,,AuctionFee,False,False,True,120,0,0,0,0,0,2020-01-14 09:35:21.320000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,772,1495,438,325,Administrative Adjustment,Administrative Adjustment,,,,AdminAdj,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,773,1495,439,21,Administrative Fee,Administrative Fee,,,,AdminFee,False,False,True,20,0,0,0,0,0,2021-08-31 10:59:43.043000,,False,0,0,,,0,0,0,False,0,,,2021-08-31 10:59:42.563000,System.Byte[]
-,774,1495,439,22,Transfer Fee,Transfer Fee,,,,TransferFee,False,False,True,0,0,0,0,0,0,2010-05-12 15:59:28.127000,,False,0,0,,,0,0,0,False,0,2010-05-12 15:59:28.127000,,2020-05-17 03:36:14.207000,System.Byte[]
-,775,1495,440,18,Late Fee,Late Fee,,,,LateFee1,False,False,True,20,0,0,0,0,0,2010-01-01 00:00:00,,False,0,0,,,0,0,15,False,0,,,2021-08-31 11:00:21.203000,System.Byte[]
-,776,1495,440,19,Late Fee #2,Late Fee #2,,,,LateFee2,False,False,True,25,0,0,0,0,0,2017-01-01 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,777,1495,440,20,Late Fee #3,Late Fee #3,,,,LateFee3,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,778,1495,441,23,NSF Fee,NSF Fee,,,,NSFFee,False,False,True,30,0,0,0,0,0,2010-03-25 09:39:40.117000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,779,1495,442,32,Outstanding Fee Balance,Outstanding Fee Balance,,,,OutFeeBal,False,False,True,20,0,0,0,0,0,2011-06-09 15:56:18.297000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:01:10.377000,,2020-05-17 03:36:14.207000,System.Byte[]
-,780,1495,442,513,Delivery Fee,Delivery Fee,,,,DeliveryFee,False,False,True,0,0,0,0,0,0,2010-05-12 16:01:59.017000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:01:59.017000,,2020-05-17 03:36:14.207000,System.Byte[]
-,781,1495,442,560,Add Warehouse Storage: IBO,Add Warehouse Storage: IBO,,,,Mob_IBO,False,False,True,0,0,0,0,0,0,2013-04-12 15:10:27.190000,,False,0,0,,,0,0,0,False,0,2013-04-12 15:10:27.190000,,2020-05-17 03:36:14.207000,System.Byte[]
-,782,1495,442,561,Warehouse Termination: OBO,Warehouse Termination: OBO,,,,Mob_OBO,False,False,True,0,0,0,0,0,0,2010-05-12 15:59:38.767000,,False,0,0,,,0,0,0,False,0,2010-05-12 15:59:38.767000,,2020-05-17 03:36:14.207000,System.Byte[]
-,783,1495,445,13,Insurance,Insurance,,,,Insurance,False,False,True,9,0,0,0,0,0,2015-05-09 09:52:29.887000,,False,0,0,,,0,0,0,False,0,,,2026-03-20 12:36:01.980000,System.Byte[]
-,784,1495,446,14,Recurring Charge 1,Recurring Charge 1,,,,Recurring1,False,True,True,0,0,0,0,0,0,2013-04-12 15:11:20.557000,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,785,1495,447,15,Recurring Charge 2,Recurring Charge 2,,,,Recurring2,False,True,True,0,0,0,0,0,0,2013-04-12 15:11:15.710000,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,786,1495,448,16,Recurring Charge 3,Recurring Charge 3,,,,Recurring3,False,True,True,0,0,0,0,0,0,2013-04-12 15:11:09.943000,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,787,1495,449,17,Recurring Charge 4,Recurring Charge 4,,,,Recurring4,False,True,True,0,0,0,0,0,0,2013-04-12 15:11:05.207000,,False,0,0,,,0,0,0,False,0,2010-03-24 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,788,1495,455,471,Recurring Charge 5,Recurring Charge 5,,,,Recurring5,False,True,True,0,0,0,0,0,0,2013-04-12 15:11:00.340000,,False,0,0,,,0,0,0,False,0,2005-10-31 17:02:59.827000,,2020-05-17 03:36:14.207000,System.Byte[]
-,789,1495,456,472,Recurring Charge 6,Recurring Charge 6,,,,Recurring6,False,True,True,0,0,0,0,0,0,2013-04-12 15:10:57.400000,,False,0,0,,,0,0,0,False,0,2005-10-31 17:03:08.233000,,2020-05-17 03:36:14.207000,System.Byte[]
-,790,1495,457,473,Recurring Charge 7,Recurring Charge 7,,,,Recurring7,False,True,True,0,0,0,0,0,0,2013-04-12 15:10:54.450000,,False,0,0,,,0,0,0,False,0,2005-10-31 17:03:13.357000,,2020-05-17 03:36:14.207000,System.Byte[]
-,791,1495,458,474,Recurring Charge 8,Recurring Charge 8,,,,Recurring8,False,True,True,0,0,0,0,0,0,2013-04-12 15:10:51.033000,,False,0,0,,,0,0,0,False,0,2005-10-31 17:03:17.543000,,2020-05-17 03:36:14.207000,System.Byte[]
-,792,1495,474,562,Delivery: DE,Delivery: DE,,,,Mob_Trans_DE,False,False,True,0,0,0,0,0,0,2010-05-12 16:01:50.577000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:01:50.577000,,2020-05-17 03:36:14.207000,System.Byte[]
-,793,1495,474,563,Re-Delivery: DF,Re-Delivery: DF,,,,Mob_Trans_DF,False,False,True,0,0,0,0,0,0,2010-05-12 16:00:33.577000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:00:33.577000,,2020-05-17 03:36:14.207000,System.Byte[]
-,794,1495,474,564,Relocation: CC,Relocation: CC,,,,Mob_Trans_CC,False,False,True,0,0,0,0,0,0,2010-05-12 16:00:58.220000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:00:58.220000,,2020-05-17 03:36:14.207000,System.Byte[]
-,795,1495,474,565,Move-In: RF,Move-In: RF,,,,Mob_Trans_RF,False,False,True,0,0,0,0,0,0,2013-04-12 15:10:42.423000,,False,0,0,,,0,0,0,False,0,2013-04-12 15:10:42.423000,,2020-05-17 03:36:14.207000,System.Byte[]
-,796,1495,474,566,Final Pickup: RE,Final Pickup: RE,,,,Mob_Trans_RE,False,False,True,0,0,0,0,0,0,2010-05-12 16:01:37.483000,,False,0,0,,,0,0,0,False,0,2010-05-12 16:01:37.483000,,2020-05-17 03:36:14.207000,System.Byte[]
-,2245,1495,432,,,small box,,,,POS,False,False,False,2.25,0,0,0,75,0,2010-04-07 17:34:07.427000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,2247,1495,433,,,med box,,,,POS,False,False,False,3,0,0,3,150,100,2010-04-13 14:42:53.767000,,False,0,0,,,0,0,0,False,0,,2010-04-13 16:26:02.140000,2020-05-17 03:36:14.207000,System.Byte[]
-,2248,1495,433,,,large box,,,,POS,False,False,False,3.75,0,0,0,118,0,2010-04-13 14:43:37.797000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,2249,1495,433,,,extra larg box,,,,POS,False,False,False,4.5,0,0,0,82,0,2010-04-13 14:44:16.360000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,2250,1495,433,,,wardrobe boxes,,,,POS,False,False,False,15.25,0,0,0,96,0,2010-04-13 14:45:02.093000,,False,0,0,,,0,0,0,False,0,,2011-06-09 16:17:58.297000,2020-05-17 03:36:14.207000,System.Byte[]
-,2251,1495,434,,,Pad locks,,,,POS,False,False,False,15,0,0,0,204,0,2010-04-13 14:45:22.767000,,False,0,0,,,0,0,0,False,0,,,2026-04-06 16:27:41.013000,System.Byte[]
-,2252,1495,434,,,Disc Locks,,,,POS,False,False,False,20,0,0,0,918,0,2010-04-13 14:45:46.907000,,False,0,0,,,0,0,0,False,0,,,2026-03-30 15:11:51.483000,System.Byte[]
-,2253,1495,433,,,med box,,,,POS,False,False,False,3,0,0,0,85,0,2010-04-13 16:26:53.720000,,False,0,0,,,0,0,0,False,0,,2023-01-24 12:29:09.253000,2023-01-24 12:29:09.260000,System.Byte[]
-,5105,1495,440,689,Late Fee #4,Late Fee #4,,,,LateFee4,False,False,True,0,0,0,0,0,0,2000-01-01 00:00:00,,False,0,0,,,0,0,0,False,0,2013-04-12 15:10:33.743000,,2020-05-17 03:36:14.207000,System.Byte[]
-,5153,1495,440,690,Late Fee #5,Late Fee #5,,,,LateFee5,False,False,True,0,0,0,0,0,0,2000-01-01 00:00:00,,False,0,0,,,0,0,0,False,0,2013-04-12 15:10:38.177000,,2020-05-17 03:36:14.207000,System.Byte[]
-,6244,1495,439,,Convenience Fee,Convenience Fee,,,,ConvFee,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,0,0,0,0,0,False,0,1900-01-02 00:00:00,,2020-05-17 03:36:14.207000,System.Byte[]
-,9918,1495,13079,747,Rent Refund Dismissed,Rent Refund Dismissed,,,,Rent_Dismssd,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,11687,1495,429,,,Auction Proceeds,,,,,False,False,False,0,6,0,0,0,0,2015-02-09 11:32:22.520000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,11815,1495,445,,,Default,,,,,False,False,False,9,0,0,0,0,0,2015-05-09 09:49:02.093000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,12217,1495,16404,839,Insurance Refund Dismissed,Insurance Refund Dismissed,,,,Insur_Dismsd,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,13967,1495,18673,840,Security Deposit Dismissed,Security Deposit Dismissed,,,,SDL_Dismssd,False,False,True,0,0,0,0,0,0,1900-01-02 00:00:00,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,19444,1495,438,,,Lock Replacement Fee,,,,,False,False,False,25,0,0,0,0,0,2023-07-11 10:27:32.713000,,False,0,0,,,0,0,0,False,0,,,2023-07-11 10:27:33.633000,System.Byte[]
-,31638,1495,438,,,Power in unit,,,,,False,False,False,0,0,0,0,0,0,2019-04-01 16:07:39.253000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,31969,1495,438,864,Insufficient Notice Fee,Insufficient Notice Fee,,,,InsNoticeFee,False,False,True,0,0,0,0,0,0,2019-02-14 16:47:33.357000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,32440,1495,439,,,Storage Treasures fees,,,,,False,False,False,20,0,0,0,0,0,2020-01-13 11:37:04.077000,,False,0,0,,,0,0,0,False,0,,,2020-05-17 03:36:14.207000,System.Byte[]
-,38661,1495,438,,,Lien Fee,,,,,False,False,False,160,0,0,0,0,0,2023-07-20 12:02:19.030000,,False,0,0,,,0,0,0,False,0,,,2023-07-20 12:02:19.100000,System.Byte[]
-,39408,1495,438,883,Credit Card Surcharge,Credit Card Surcharge,,,,CCSurcharge,False,False,True,0,0,0,0,0,0,2025-04-29 03:14:53.923000,,False,0,0,,,1,0,0,False,0,2025-04-29 03:14:53.923000,,2025-04-29 03:14:53.923000,System.Byte[]
-Totals (56),,,,,,,,,,,False,False,False,604.75,6,0,33,1729,100,,,False,0,0,,,1,0,15,False,0,,,,
-Averages (56),,,,,,,,,,,False,False,False,10.7991071428571,0.107142857142857,0,0.589285714285714,30.875,1.78571428571429,,,False,0,0,,,0,0,0.267857142857143,False,0,,,,
+ChargeDescID,sChgDesc
+763,Security Deposit
+764,Outstanding Rent Balance
+765,Rent
+766,Equipment Rental
+767,Reservation Fee
+768,Invoice Fee
+769,Lock Cut Fee
+770,Damages and Repairs
+771,Auction Fee
+772,Administrative Adjustment
+773,Administrative Fee
+774,Transfer Fee
+775,Late Fee
+776,Late Fee #2
+777,Late Fee #3
+778,NSF Fee
+779,Outstanding Fee Balance
+780,Delivery Fee
+781,Add Warehouse Storage: IBO
+782,Warehouse Termination: OBO
+783,Insurance
+784,Recurring Charge 1
+785,Recurring Charge 2
+786,Recurring Charge 3
+787,Recurring Charge 4
+788,Recurring Charge 5
+789,Recurring Charge 6
+790,Recurring Charge 7
+791,Recurring Charge 8
+792,Delivery: DE
+793,Re-Delivery: DF
+794,Relocation: CC
+795,Move-In: RF
+796,Final Pickup: RE
+2245,small box
+2247,med box
+2248,large box
+2249,extra larg box
+2250,wardrobe boxes
+2251,Pad locks
+2252,Disc Locks
+2253,med box
+5105,Late Fee #4
+5153,Late Fee #5
+6244,Convenience Fee
+9918,Rent Refund Dismissed
+11687,Auction Proceeds
+11815,Default
+12217,Insurance Refund Dismissed
+13967,Security Deposit Dismissed
+19444,Lock Replacement Fee
+31638,Power in unit
+31969,Insufficient Notice Fee
+32440,Storage Treasures fees
+38661,Lien Fee
+39408,Credit Card Surcharge
