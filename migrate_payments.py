@@ -56,6 +56,7 @@ from datetime import datetime
 
 import pandas as pd
 from dotenv import load_dotenv
+from psycopg2.extras import execute_values
 from sqlalchemy import text as sa_text
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -96,34 +97,21 @@ _INSERT_SQL = """
         reversal_reason,
         reversed_by,
         reversed_at
-    ) VALUES (
-        :external_id,
-        :external_payment_id,
-        :receipt_number,
-        :customer_id,
-        :location_id,
-        :organization_id,
-        :amount_in_cents,
-        :payment_method_type_id,
-        :status,
-        :payment_date,
-        :failure_reason,
-        :reference_number,
-        :notes,
-        :created_by,
-        :created_at,
-        :updated_at,
-        :payment_profile_id,
-        :stripe_payment_intent_id,
-        :stripe_charge_id,
-        :stripe_refund_id,
-        :transaction_fee_in_cents,
-        :refunded_amount_in_cents,
-        :reversal_reason,
-        :reversed_by,
-        :reversed_at
-    )
+    ) VALUES %s
+    ON CONFLICT (external_id) WHERE external_id IS NOT NULL DO NOTHING
 """
+
+_INSERT_COLS = [
+    "external_id", "external_payment_id", "receipt_number",
+    "customer_id", "location_id", "organization_id",
+    "amount_in_cents", "payment_method_type_id", "status",
+    "payment_date", "failure_reason", "reference_number",
+    "notes", "created_by", "created_at", "updated_at",
+    "payment_profile_id", "stripe_payment_intent_id",
+    "stripe_charge_id", "stripe_refund_id",
+    "transaction_fee_in_cents", "refunded_amount_in_cents",
+    "reversal_reason", "reversed_by", "reversed_at",
+]
 
 # Excel output columns (in display order, audit fields last)
 EXCEL_OUTPUT_COLUMNS = [
@@ -325,165 +313,116 @@ def process_payments(
     logger.info(f"📂  Loading payments file: {payments_file}")
     df = pd.read_csv(payments_file, dtype=str, low_memory=False, encoding='latin-1')
     df.columns = df.columns.str.strip().str.upper()
-    logger.info(f"    Total payment rows: {len(df)}")
-    print(f"  Processing {len(df):,} rows — progress every 10,000 rows  (full detail in log file)\n", flush=True)
+    df = df.drop(columns=["TOTALS & AVERAGES"], errors="ignore")
+    total_raw = len(df)
+    logger.info(f"    Total payment rows: {total_raw:,}")
 
     stats = {
-        "total"           : 0,
+        "total"           : total_raw,
         "inserted"        : 0,
         "skipped_dup"     : 0,
         "skipped_no_cust" : 0,
-        "skipped_zero_amt": 0,  # $0 payments — violate chk_payment_amounts constraint
+        "skipped_zero_amt": 0,
         "errors"          : 0,
-        "failed_payments" : 0,  # FAILED status (NSF / deleted)
+        "failed_payments" : 0,
         "dry_run"         : dry_run,
         "output_mode"     : output_mode,
     }
 
-    excel_records  = []
-    batch          = []        # accumulate records for batch insert
-    batch_row_idxs = []        # track row numbers for error reporting
+    # ── Step 1: Pre-filter with vectorized pandas (fast) ─────────────────────
 
-    def flush_batch():
-        """Commit the current batch to the DB."""
-        if not batch:
-            return
-        try:
-            with engine.begin() as conn:
-                conn.execute(sa_text(_INSERT_SQL), batch)
-            stats["inserted"] += len(batch)
-        except Exception as exc:
-            exc_str = str(exc)
+    # Drop blank LedgerID
+    df = df[df["LEDGERID"].notna() & (df["LEDGERID"].str.strip() != "")].copy()
 
-            # Connection / network errors — abort immediately, do not retry row-by-row.
-            # The run is idempotent: re-run once connectivity is restored.
-            is_connection_err = any(kw in exc_str for kw in (
-                "could not translate host name",
-                "could not connect to server",
-                "connection refused",
-                "Name or service not known",
-                "OperationalError",
-                "timeout",
-            ))
-            if is_connection_err:
-                logger.error(f"DB connection lost: {exc_str[:200]}")
-                print(f"\n  ERROR: DB connection lost — {exc_str[:120]}\n"
-                      f"  Re-run the script once connectivity is restored.\n"
-                      f"  Already-imported rows will be skipped automatically.\n",
-                      flush=True)
-                batch.clear()
-                batch_row_idxs.clear()
-                raise SystemExit(1)
+    # Map LedgerID → customer_id vectorized
+    df["LEDGERID_INT"] = pd.to_numeric(df["LEDGERID"], errors="coerce")
+    df = df[df["LEDGERID_INT"].notna()].copy()
+    df["LEDGERID_INT"] = df["LEDGERID_INT"].astype(int)
+    df["customer_id"] = df["LEDGERID_INT"].map(ledger_to_customer)
+    no_cust = df["customer_id"].isna().sum()
+    stats["skipped_no_cust"] = int(no_cust)
+    df = df[df["customer_id"].notna()].copy()
+    df["customer_id"] = df["customer_id"].astype(int)
 
-            # Data / constraint errors — fall back to row-by-row to isolate the bad row
-            logger.warning(f"Batch insert failed ({exc_str[:120]}); retrying row-by-row ...")
-            for rec, ridx in zip(batch, batch_row_idxs):
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(sa_text(_INSERT_SQL), rec)
-                    stats["inserted"] += 1
-                except Exception as row_exc:
-                    log_error(ridx, rec.get("external_id"), "DB_INSERT", str(row_exc), rec.get("external_id"))
-                    stats["errors"] += 1
-        finally:
-            batch.clear()
-            batch_row_idxs.clear()
+    # Drop zero-amount rows
+    df["DCPMTAMT_NUM"] = pd.to_numeric(df["DCPMTAMT"], errors="coerce").fillna(0)
+    zero_amt = (df["DCPMTAMT_NUM"] == 0).sum()
+    stats["skipped_zero_amt"] = int(zero_amt)
+    df = df[df["DCPMTAMT_NUM"] != 0].copy()
 
-    for row_idx, row in df.iterrows():
-        stats["total"] += 1
+    # Drop already-imported PaymentIDs
+    df["ext_id"] = df["PAYMENTID"].apply(
+        lambda x: PT.derive_external_id(x) if pd.notna(x) else None
+    )
+    df = df[df["ext_id"].notna()].copy()
+    dup_mask = df["ext_id"].isin(existing_ids)
+    stats["skipped_dup"] = int(dup_mask.sum())
+    df = df[~dup_mask].copy()
+    df = df.reset_index(drop=True)
 
-        # ── Resolve LedgerID → customer_id ───────────────────────────────────
-        raw_ledger = row.get("LEDGERID")
-        try:
-            ledger_id = int(float(raw_ledger))
-        except (ValueError, TypeError):
-            log_error(row_idx + 2, row.get("PAYMENTID"), "LEDGERID", "Cannot parse LedgerID", raw_ledger)
-            stats["errors"] += 1
-            continue
+    logger.info(f"    After pre-filter   : {len(df):,} rows to process")
+    logger.info(f"    Skipped no-customer: {stats['skipped_no_cust']:,}")
+    logger.info(f"    Skipped zero-amount: {stats['skipped_zero_amt']:,}")
+    logger.info(f"    Skipped duplicates : {stats['skipped_dup']:,}")
+    print(f"  {len(df):,} rows to insert after filtering\n", flush=True)
 
-        customer_id = ledger_to_customer.get(ledger_id)
-        if customer_id is None:
-            log_skipped(row_idx + 2, row.get("PAYMENTID"), "LEDGERID",
-                        f"LedgerID {ledger_id} has no matching customer", ledger_id)
-            stats["skipped_no_cust"] += 1
-            continue
+    if dry_run:
+        stats["inserted"] = len(df)
+        logger.info(f"DRY RUN — {len(df):,} rows would be inserted.")
+        return stats
 
-        # ── Deduplication: skip if already imported ───────────────────────────
-        raw_payment_id = row.get("PAYMENTID")
-        try:
-            ext_id = PT.derive_external_id(raw_payment_id)
-        except (ValueError, TypeError):
-            log_error(row_idx + 2, raw_payment_id, "PAYMENTID", "Cannot parse PaymentID", raw_payment_id)
-            stats["errors"] += 1
-            continue
-
-        if ext_id in existing_ids:
-            stats["skipped_dup"] += 1
-            continue
-
-        # ── Transform row ─────────────────────────────────────────────────────
-        try:
-            record = PT.transform_row(row, customer_id, org_id, loc_id, created_by)
-        except ValueError as exc:
-            log_error(row_idx + 2, ext_id, "TRANSFORM", str(exc), raw_payment_id)
-            stats["errors"] += 1
-            continue
-
-        if record["status"] == "FAILED":
-            stats["failed_payments"] += 1
-
-        # ── Skip zero-amount payments (violate chk_payment_amounts constraint) ─
-        if record["amount_in_cents"] == 0:
-            logger.info(f"Skipping zero-amount payment: external_id={ext_id}")
-            stats["skipped_zero_amt"] += 1
-            continue
-
-        # ── Route to output ───────────────────────────────────────────────────
-        if output_mode == "excel":
-            excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
-            existing_ids.add(ext_id)
-            stats["inserted"] += 1
-
-        elif dry_run:
-            # Dry run: count only — no per-row console noise
-            logger.debug(
-                f"[DRY RUN] Row {row_idx + 2}: PaymentID={ext_id} "
-                f"customer_id={customer_id} amount={record['amount_in_cents']}c "
-                f"status={record['status']}"
-            )
-            stats["inserted"] += 1
-
-        else:
-            # Live DB: accumulate into batch
-            batch.append(record)
-            batch_row_idxs.append(row_idx + 2)
-            existing_ids.add(ext_id)
-
-            if len(batch) >= batch_size:
-                flush_batch()
-
-        # ── Progress print every 10,000 rows (console) ───────────────────────
-        if stats["total"] % 10_000 == 0:
-            pct = stats["total"] / len(df) * 100
-            print(
-                f"  {pct:5.1f}%  |  processed {stats['total']:,} / {len(df):,}"
-                f"  |  will import {stats['inserted']:,}"
-                f"  |  skipped {stats['skipped_no_cust']:,}"
-                f"  |  errors {stats['errors']:,}",
-                flush=True,
-            )
-
-    # ── Flush final batch (db mode) ───────────────────────────────────────────
-    if not dry_run and output_mode == "db":
-        flush_batch()
-
-    # ── Write Excel file ──────────────────────────────────────────────────────
     if output_mode == "excel":
+        excel_records = []
+        for row in df.itertuples(index=False):
+            row_dict = row._asdict()
+            customer_id = row_dict["customer_id"]
+            try:
+                record = PT.transform_row(pd.Series(row_dict), customer_id, org_id, loc_id, created_by)
+                excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
+                stats["inserted"] += 1
+            except ValueError as exc:
+                log_error(0, row_dict.get("ext_id"), "TRANSFORM", str(exc), row_dict.get("PAYMENTID"))
+                stats["errors"] += 1
         if excel_records:
-            _write_excel(excel_records, out_file)
-            stats["excel_output"] = out_file
-        else:
-            logger.warning("⚠️   No records to write — Excel file not created.")
+            import openpyxl
+            pd.DataFrame(excel_records).to_excel(out_file, index=False)
+            logger.info(f"Excel written: {out_file}")
+        return stats
+
+    # ── Step 2: Transform rows using itertuples (fast) ───────────────────────
+    tuples = []
+    for row in df.itertuples(index=False):
+        row_dict = row._asdict()
+        customer_id = row_dict["customer_id"]
+        try:
+            record = PT.transform_row(pd.Series(row_dict), customer_id, org_id, loc_id, created_by)
+            if record["status"] == "FAILED":
+                stats["failed_payments"] += 1
+            tuples.append(tuple(record.get(c) for c in _INSERT_COLS))
+        except ValueError as exc:
+            log_error(0, row_dict.get("ext_id"), "TRANSFORM", str(exc), row_dict.get("PAYMENTID"))
+            stats["errors"] += 1
+
+    logger.info(f"    Transformed: {len(tuples):,} rows ready for insert")
+
+    # ── Step 3: Bulk insert with execute_values (fast) ───────────────────────
+    raw_conn = engine.raw_connection()
+    cursor   = raw_conn.cursor()
+    try:
+        for i in range(0, len(tuples), batch_size):
+            chunk = tuples[i:i + batch_size]
+            execute_values(cursor, _INSERT_SQL, chunk, page_size=batch_size)
+            raw_conn.commit()
+            stats["inserted"] += len(chunk)
+            pct = min(100, (i + len(chunk)) / len(tuples) * 100)
+            print(f"  {pct:5.1f}%  |  inserted {stats['inserted']:,} / {len(tuples):,}", flush=True)
+    except Exception as exc:
+        raw_conn.rollback()
+        logger.error(f"❌  Bulk insert failed: {exc}")
+        raise
+    finally:
+        cursor.close()
+        raw_conn.close()
 
     return stats
 

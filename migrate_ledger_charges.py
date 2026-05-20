@@ -135,6 +135,7 @@ def load_charge_type_map(charge_types_file: str) -> dict:
     logger.info(f"📂  Loading charge type mapping: {charge_types_file}")
     df = pd.read_csv(charge_types_file, dtype=str, encoding='utf-8')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
+    df.columns = df.columns.str.strip().str.upper()
 
     mapping = {}
     for _, row in df.iterrows():
@@ -426,26 +427,123 @@ def process_charges(
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
     df = df[df["CHARGEID"].notna() & (df["CHARGEID"].str.strip() != "")].copy()
-    logger.info(f"    Charge rows to process: {len(df):,}")
-    print(f"\n  Processing {len(df):,} rows — batch size {batch_size:,}\n", flush=True)
+    total_raw = len(df)
+    logger.info(f"    Total charge rows: {total_raw:,}")
 
     stats = {
-        "total": 0, "inserted": 0, "skipped_dup": 0,
+        "total": total_raw, "inserted": 0, "skipped_dup": 0,
         "skipped_no_cust": 0, "skipped_no_ct": 0,
         "errors": 0, "dry_run": dry_run, "output_mode": output_mode,
     }
 
-    excel_records = []
-    skipped_rows  = []
-    batch_tuples  = []   # list of tuples for execute_values
-    batch_ids     = []   # parallel list of charge_ids for logging on error
+    # ── Step 1: Vectorized pre-filter ─────────────────────────────────────────
 
-    # ── Get raw psycopg2 connection once — reused for all batches ─────────────
-    raw_conn   = None
-    raw_cursor = None
-    if output_mode == "db" and not dry_run:
-        raw_conn   = engine.raw_connection()
-        raw_cursor = raw_conn.cursor()
+    # Parse ChargeDescID and LedgerID as integers; drop unparseable rows
+    df["CHARGEDESCID_INT"] = pd.to_numeric(df["CHARGEDESCID"], errors="coerce")
+    df["LEDGERID_INT"]     = pd.to_numeric(df["LEDGERID"],     errors="coerce")
+    bad_parse = df["CHARGEDESCID_INT"].isna() | df["LEDGERID_INT"].isna()
+    if bad_parse.any():
+        stats["errors"] += int(bad_parse.sum())
+        logger.warning(f"    Dropped {bad_parse.sum()} rows with unparseable CHARGEDESCID/LEDGERID")
+    df = df[~bad_parse].copy()
+    df["CHARGEDESCID_INT"] = df["CHARGEDESCID_INT"].astype(int)
+    df["LEDGERID_INT"]     = df["LEDGERID_INT"].astype(int)
+
+    # Resolve charge_type_id (vectorized)
+    df["charge_type_id"] = df["CHARGEDESCID_INT"].map(charge_type_map)
+    no_ct_df = df[df["charge_type_id"].isna()].copy()
+    stats["skipped_no_ct"] = len(no_ct_df)
+    df = df[df["charge_type_id"].notna()].copy()
+    df["charge_type_id"] = df["charge_type_id"].astype(int)
+
+    # Resolve tenant_id → customer_id (vectorized)
+    df["tenant_id"]   = df["LEDGERID_INT"].map(ledger_to_tenant)
+    df["customer_id"] = df["tenant_id"].map(
+        lambda t: customer_map.get(int(t)) if pd.notna(t) else None
+    )
+    no_cust_df = df[df["customer_id"].isna()].copy()
+    stats["skipped_no_cust"] = len(no_cust_df)
+    df = df[df["customer_id"].notna()].copy()
+    df["customer_id"] = df["customer_id"].astype(int)
+
+    # Resolve unit_id (nullable — missing unit is allowed)
+    df["_unit_name"] = df["LEDGERID_INT"].map(ledger_to_unitname)
+    df["unit_id"]    = df["_unit_name"].map(
+        lambda u: unit_map.get(str(u).strip()) if pd.notna(u) else None
+    )
+
+    # Resolve memo from charge_desc_map
+    df["_memo"] = df["CHARGEDESCID_INT"].map(charge_desc_map)
+
+    # Build external_charge_id and dedup
+    df["ext_charge_id"] = df["CHARGEID"].apply(lambda x: str(int(float(x))))
+    dup_mask = df["ext_charge_id"].isin(existing_ids)
+    stats["skipped_dup"] = int(dup_mask.sum())
+    df = df[~dup_mask].copy().reset_index(drop=True)
+
+    logger.info(f"    After pre-filter      : {len(df):,} rows to process")
+    logger.info(f"    Skipped no-customer   : {stats['skipped_no_cust']:,}")
+    logger.info(f"    Skipped no-chargetype : {stats['skipped_no_ct']:,}")
+    logger.info(f"    Skipped duplicates    : {stats['skipped_dup']:,}")
+    print(f"  {len(df):,} rows to insert after filtering\n", flush=True)
+
+    # ── Build skipped-rows Excel data (vectorized) ────────────────────────────
+    skipped_rows = []
+    for r in no_ct_df.itertuples(index=False):
+        rd = r._asdict()
+        skipped_rows.append({
+            "CHARGEID": rd.get("CHARGEID"), "CHARGEDESCID": rd.get("CHARGEDESCID"),
+            "LEDGERID": rd.get("LEDGERID"), "DCAMT": rd.get("DCAMT"),
+            "DCHGSTRT": rd.get("DCHGSTRT"), "DCREATED": rd.get("DCREATED"),
+            "skip_reason": f"ChargeDescID {rd.get('CHARGEDESCID')} not in charge_type mapping",
+        })
+    for r in no_cust_df.itertuples(index=False):
+        rd = r._asdict()
+        ledger_id = rd.get("LEDGERID_INT")
+        tenant_id = ledger_to_tenant.get(int(ledger_id)) if ledger_id else None
+        skipped_rows.append({
+            "CHARGEID": rd.get("CHARGEID"), "CHARGEDESCID": rd.get("CHARGEDESCID"),
+            "LEDGERID": rd.get("LEDGERID"), "DCAMT": rd.get("DCAMT"),
+            "DCHGSTRT": rd.get("DCHGSTRT"), "DCREATED": rd.get("DCREATED"),
+            "skip_reason": f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer",
+        })
+
+    if dry_run:
+        stats["inserted"] = len(df)
+        logger.info(f"DRY RUN — {len(df):,} rows would be inserted.")
+        _flush_skipped(skipped_rows, stats)
+        return stats
+
+    # ── Step 2: Excel export mode ──────────────────────────────────────────────
+    if output_mode == "excel":
+        excel_records = []
+        for row in df.itertuples(index=False):
+            rd = row._asdict()
+            try:
+                record = transform_row(
+                    pd.Series(rd),
+                    customer_id    = rd["customer_id"],
+                    unit_id        = rd["unit_id"] if pd.notna(rd.get("unit_id")) else None,
+                    charge_type_id = rd["charge_type_id"],
+                    loc_id=loc_id, org_id=org_id, created_by=created_by,
+                    memo=rd.get("_memo"),
+                )
+                excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
+                stats["inserted"] += 1
+            except Exception as exc:
+                log_error(0, rd.get("CHARGEID"), "TRANSFORM", str(exc), rd.get("CHARGEID"))
+                stats["errors"] += 1
+        if excel_records:
+            _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "LedgerCharges")
+            stats["excel_output"] = out_file
+        _flush_skipped(skipped_rows, stats)
+        return stats
+
+    # ── Step 3: Transform rows using itertuples (fast) ────────────────────────
+    batch_tuples: list[tuple] = []
+    batch_ids:    list[str]   = []
+    raw_conn   = engine.raw_connection()
+    raw_cursor = raw_conn.cursor()
 
     def flush_batch():
         if not batch_tuples:
@@ -481,116 +579,54 @@ def process_charges(
             batch_tuples.clear()
             batch_ids.clear()
 
-    # ── Main row loop ──────────────────────────────────────────────────────────
-    for row_idx, row in df.iterrows():
-        stats["total"] += 1
-        excel_row = row_idx + 2
-
-        # ── Parse key IDs ─────────────────────────────────────────────────────
+    total_to_insert = len(df)
+    for row in df.itertuples(index=False):
+        rd         = row._asdict()
+        charge_id  = rd["ext_charge_id"]
+        unit_id    = rd["unit_id"] if pd.notna(rd.get("unit_id")) else None
         try:
-            charge_id      = str(int(row["CHARGEID"]))
-            charge_desc_id = int(row["CHARGEDESCID"])
-            ledger_id      = int(row["LEDGERID"])
-        except (ValueError, TypeError) as exc:
-            log_error(excel_row, row.get("CHARGEID"), "PARSE", str(exc), row.get("CHARGEID"))
-            stats["errors"] += 1
-            continue
-
-        # ── Dedup (in-memory — ON CONFLICT also handles DB-level) ────────────
-        if charge_id in existing_ids:
-            stats["skipped_dup"] += 1
-            continue
-
-        # ── Resolve charge_type_id ────────────────────────────────────────────
-        charge_type_id = charge_type_map.get(charge_desc_id)
-        if charge_type_id is None:
-            reason = f"ChargeDescID {charge_desc_id} not in charge_type mapping"
-            skipped_rows.append({
-                "CHARGEID": charge_id, "CHARGEDESCID": charge_desc_id,
-                "LEDGERID": ledger_id, "DCAMT": row.get("DCAMT"),
-                "DCHGSTRT": row.get("DCHGSTRT"), "DCREATED": row.get("DCREATED"),
-                "skip_reason": reason,
-            })
-            log_skipped(excel_row, charge_id, "CHARGEDESCID", reason, charge_desc_id)
-            stats["skipped_no_ct"] += 1
-            continue
-
-        # ── Resolve customer_id ───────────────────────────────────────────────
-        tenant_id   = ledger_to_tenant.get(ledger_id)
-        customer_id = customer_map.get(tenant_id) if tenant_id else None
-        if customer_id is None:
-            reason = f"LedgerID {ledger_id} → TenantID {tenant_id} not found in storentic.customer"
-            skipped_rows.append({
-                "CHARGEID": charge_id, "CHARGEDESCID": charge_desc_id,
-                "LEDGERID": ledger_id, "DCAMT": row.get("DCAMT"),
-                "DCHGSTRT": row.get("DCHGSTRT"), "DCREATED": row.get("DCREATED"),
-                "skip_reason": reason,
-            })
-            log_skipped(excel_row, charge_id, "LEDGERID", reason, ledger_id)
-            stats["skipped_no_cust"] += 1
-            continue
-
-        # ── Resolve unit_id (nullable) ────────────────────────────────────────
-        unit_name = ledger_to_unitname.get(ledger_id)
-        unit_id   = unit_map.get(unit_name) if unit_name else None
-
-        # ── Transform ─────────────────────────────────────────────────────────
-        memo = charge_desc_map.get(charge_desc_id)
-        try:
-            record = transform_row(row, customer_id, unit_id, charge_type_id,
-                                   loc_id, org_id, created_by, memo=memo)
-        except Exception as exc:
-            log_error(excel_row, charge_id, "TRANSFORM", str(exc), charge_id)
-            stats["errors"] += 1
-            continue
-
-        # ── Route ─────────────────────────────────────────────────────────────
-        if output_mode == "excel":
-            excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
-            existing_ids.add(charge_id)
-            stats["inserted"] += 1
-
-        elif dry_run:
-            stats["inserted"] += 1
-
-        else:
+            record = transform_row(
+                pd.Series(rd),
+                customer_id    = rd["customer_id"],
+                unit_id        = unit_id,
+                charge_type_id = rd["charge_type_id"],
+                loc_id=loc_id, org_id=org_id, created_by=created_by,
+                memo=rd.get("_memo"),
+            )
             batch_tuples.append(_record_to_tuple(record))
             batch_ids.append(charge_id)
             existing_ids.add(charge_id)
             if len(batch_tuples) >= batch_size:
                 flush_batch()
+                pct = min(100, stats["inserted"] / total_to_insert * 100)
+                print(
+                    f"  {pct:5.1f}%  |  inserted {stats['inserted']:,} / {total_to_insert:,}"
+                    f"  err={stats['errors']:,}",
+                    flush=True,
+                )
+        except Exception as exc:
+            log_error(0, charge_id, "TRANSFORM", str(exc), charge_id)
+            stats["errors"] += 1
 
-        # ── Progress ──────────────────────────────────────────────────────────
-        if stats["total"] % 10_000 == 0:
-            pct = stats["total"] / len(df) * 100
-            print(
-                f"  {pct:5.1f}%  |  {stats['total']:,}/{len(df):,}"
-                f"  inserted={stats['inserted']:,}"
-                f"  skip_cust={stats['skipped_no_cust']:,}"
-                f"  skip_ct={stats['skipped_no_ct']:,}"
-                f"  err={stats['errors']:,}",
-                flush=True,
-            )
+    # ── Flush remainder ───────────────────────────────────────────────────────
+    flush_batch()
+    raw_cursor.close()
+    raw_conn.close()
 
-    # ── Flush remainder and close connection ──────────────────────────────────
-    if output_mode == "db" and not dry_run:
-        flush_batch()
-        raw_cursor.close()
-        raw_conn.close()
-
-    # ── Write Excel outputs ───────────────────────────────────────────────────
-    if output_mode == "excel" and excel_records:
-        _write_excel(excel_records, out_file, EXCEL_OUTPUT_COLUMNS, "LedgerCharges")
-        stats["excel_output"] = out_file
-
-    if skipped_rows:
-        ts           = datetime.now().strftime("%Y%m%d_%H%M%S")
-        skipped_path = os.path.join(OUTPUT_DIR, f"ledger_charges_skipped_{ts}.xlsx")
-        _write_excel(skipped_rows, skipped_path, SKIPPED_COLUMNS, "Skipped")
-        stats["skipped_output"] = skipped_path
-        print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows → {skipped_path}", flush=True)
-
+    # ── Write skipped-rows Excel ──────────────────────────────────────────────
+    _flush_skipped(skipped_rows, stats)
     return stats
+
+
+def _flush_skipped(skipped_rows: list, stats: dict):
+    """Write skipped rows to Excel and update stats."""
+    if not skipped_rows:
+        return
+    ts           = datetime.now().strftime("%Y%m%d_%H%M%S")
+    skipped_path = os.path.join(OUTPUT_DIR, f"ledger_charges_skipped_{ts}.xlsx")
+    _write_excel(skipped_rows, skipped_path, SKIPPED_COLUMNS, "Skipped")
+    stats["skipped_output"] = skipped_path
+    print(f"\n  ⚠️   {len(skipped_rows):,} skipped rows → {skipped_path}", flush=True)
 
 
 def _write_excel(records: list, out_path: str, columns: list, sheet_name: str):
