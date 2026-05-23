@@ -356,19 +356,16 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
     b_nsf       = bool(row.get("BNSF", False))
     now         = datetime.utcnow()
 
-    # Status logic
-    is_reversed = b_nsf or (d_deleted is not None)
+    # Status logic — only dDeleted drives REVERSED; bNSF does not affect status
+    is_reversed = d_deleted is not None
     status      = "REVERSED" if is_reversed else "POSTED"
 
     # Reversal metadata
     reversed_at     = None
     reversal_reason = None
     if is_reversed:
-        if d_deleted is not None:
-            reversed_at = d_deleted
-        else:
-            reversed_at = d_created or now
-        reversal_reason = "NSF" if b_nsf else "Deleted in SiteLink"
+        reversed_at     = d_deleted
+        reversal_reason = "Deleted in SiteLink"
 
     return {
         "external_charge_id": charge_id,

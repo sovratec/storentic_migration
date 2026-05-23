@@ -1,0 +1,36 @@
+# Folders to ignore
+logs/
+docs/
+templates/
+sql/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+
+# Virtual environment
+venv/
+env/
+.env
+.venv/
+
+# Output & data
+output/
+
+# Environment variables / secrets
+*.env
+.env.*
+config.local.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
