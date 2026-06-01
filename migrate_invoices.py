@@ -70,7 +70,7 @@ Environment (.env)
 import argparse
 import os
 import sys
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -216,7 +216,7 @@ def load_payments_file(filepath: str) -> dict[str, int]:
     logger.info(f"Loading payments file: {filepath}")
     df = pd.read_csv(filepath, dtype=str, low_memory=False)
     df.columns = df.columns.str.strip().str.upper()
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
 
     payment_map: dict[str, int] = {}
     skipped = 0
@@ -339,10 +339,15 @@ def build_invoice_records(
     """
     Groups detail rows by InvoiceID, resolves all lookups, and returns:
         (records_to_insert, skipped_rows)
+
+    Each record includes a '_payment_ids' key (list of PAYMENTID strings from the
+    source file) used later to link payments → invoices after insert. This key is
+    NOT written to the DB — it is stripped before building INSERT tuples.
     """
-    now     = datetime.utcnow()
+    now     = datetime.now(timezone.utc)
     records = []
     skipped = []
+    has_payment_col = "PAYMENTID" in df.columns
 
     grouped = df.groupby("INVOICEID", sort=False)
     logger.info(f"    Building records for {grouped.ngroups:,} unique invoices ...")
@@ -409,27 +414,51 @@ def build_invoice_records(
             continue
 
         status, total_cents, paid_cents = _derive_status(charge_ids, charge_map, payment_map)
+
+        # Skip negative or zero-total invoices (credit notes) — chk_amounts requires total_in_cents >= 0
+        if total_cents <= 0:
+            skipped.append({
+                "INVOICEID":   invoice_id,
+                "IINVOICENUM": invoice_num,
+                "ChargeIDs":   ",".join(charge_ids),
+                "skip_reason": f"Skipped: total_in_cents={total_cents} (credit note / negative invoice)",
+            })
+            log_skipped(0, invoice_id, "total_in_cents",
+                        f"total_in_cents={total_cents} — credit note skipped", invoice_id)
+            continue
+
         balance_cents = max(total_cents - paid_cents, 0)
 
+        # Collect unique PAYMENTIDs from all detail rows for this invoice
+        payment_ids: list[str] = []
+        if has_payment_col:
+            payment_ids = list({
+                pid for pid in (
+                    _clean_id(v) for v in group["PAYMENTID"].dropna()
+                ) if pid
+            })
+
         records.append({
-            "invoice_number":      invoice_num,
-            "customer_id":         customer_id,
-            "location_id":         loc_id,
-            "organization_id":     org_id,
-            "invoice_type_id":     _invoice_type_id(charge_type_id),
-            "status":              status,
-            "issue_date":          issue_date,
-            "due_date":            due_date,
-            "subtotal_in_cents":   total_cents,
-            "tax_in_cents":        0,
-            "total_in_cents":      total_cents,
+            "invoice_number":       invoice_num,
+            "customer_id":          customer_id,
+            "location_id":          loc_id,
+            "organization_id":      org_id,
+            "invoice_type_id":      _invoice_type_id(charge_type_id),
+            "status":               status,
+            "issue_date":           issue_date,
+            "due_date":             due_date,
+            "subtotal_in_cents":    total_cents,
+            "tax_in_cents":         0,
+            "total_in_cents":       total_cents,
             "amount_paid_in_cents": paid_cents,
-            "balance_in_cents":    balance_cents,
-            "created_by":          created_by,
-            "created_at":          now,
-            "updated_at":          now,
-            "version":             0,
-            "external_invoice_id": invoice_id,
+            "balance_in_cents":     balance_cents,
+            "created_by":           created_by,
+            "created_at":           now,
+            "updated_at":           now,
+            "version":              0,
+            "external_invoice_id":  invoice_id,
+            # ── not written to DB — used only for payment linking ──
+            "_payment_ids":         payment_ids,
         })
 
     return records, skipped
@@ -448,6 +477,7 @@ def insert_invoices(records: list[dict], engine, batch_size: int) -> int:
     try:
         for i in range(0, len(records), batch_size):
             batch  = records[i: i + batch_size]
+            # _payment_ids is metadata only — exclude from INSERT tuples
             tuples = [tuple(r[col] for col in _INSERT_COLS) for r in batch]
             execute_values(raw_cursor, _INSERT_SQL, tuples, page_size=batch_size)
             raw_conn.commit()
@@ -461,6 +491,99 @@ def insert_invoices(records: list[dict], engine, batch_size: int) -> int:
         raw_conn.close()
 
     return inserted
+
+
+def link_payments_to_invoices(records: list[dict], engine, dry_run: bool) -> int:
+    """
+    After invoices are inserted, update storentic.payments.invoice_id for every
+    payment referenced in the source file.
+
+    Steps:
+      1. Collect all external_invoice_ids that have at least one PAYMENTID.
+      2. Query storentic.invoices to get their DB PKs.
+      3. For each (invoice_pk, external_payment_id) pair, update
+         storentic.payments SET invoice_id = <pk>
+         WHERE external_payment_id = <pay_id> AND invoice_id IS NULL.
+
+    Returns the total number of payment rows updated.
+    """
+    # Build list of (external_invoice_id, external_payment_id) pairs
+    pairs: list[tuple[str, str]] = []
+    for r in records:
+        ext_inv_id = r["external_invoice_id"]
+        for pay_id in r.get("_payment_ids", []):
+            pairs.append((ext_inv_id, pay_id))
+
+    if not pairs:
+        logger.info("    No PAYMENTID values found — skipping payment link step.")
+        return 0
+
+    # Fetch invoice PKs for all inserted external_invoice_ids
+    ext_inv_ids = list({p[0] for p in pairs})
+    logger.info(f"🔗  Linking payments → invoices  ({len(pairs):,} pairs, {len(ext_inv_ids):,} invoices) ...")
+
+    raw_conn = engine.raw_connection()
+    try:
+        cur = raw_conn.cursor()
+        # Cast the text array to bigint[] in SQL to match the bigint column type
+        cur.execute(
+            "SELECT id, external_invoice_id FROM storentic.invoices "
+            "WHERE external_invoice_id = ANY(%s::bigint[])",
+            (ext_inv_ids,)
+        )
+        # Store as str key to match the string keys used in records
+        invoice_pk_map: dict[str, int] = {str(row[1]): row[0] for row in cur.fetchall()}
+        cur.close()
+    finally:
+        raw_conn.close()
+
+    logger.info(f"    Invoice PKs resolved: {len(invoice_pk_map):,}")
+
+    if not invoice_pk_map:
+        logger.warning("    No invoice PKs found — payment link skipped.")
+        return 0
+
+    # Build (invoice_pk, external_payment_id) tuples for bulk UPDATE
+    update_tuples = []
+    for ext_inv_id, pay_id in pairs:
+        invoice_pk = invoice_pk_map.get(ext_inv_id)
+        if invoice_pk is not None:
+            update_tuples.append((invoice_pk, pay_id))
+
+    if not update_tuples:
+        logger.info("    No matching invoice PKs found — payment link skipped.")
+        return 0
+
+    if dry_run:
+        logger.info(f"    [DRY RUN] Would update {len(update_tuples):,} payments.invoice_id.")
+        return len(update_tuples)
+
+    # Single bulk UPDATE — replaces N individual statements
+    raw_conn = engine.raw_connection()
+    try:
+        with raw_conn.cursor() as cur:
+            execute_values(
+                cur,
+                """
+                UPDATE storentic.payments AS p
+                SET invoice_id = v.invoice_id
+                FROM (VALUES %s) AS v(invoice_id, external_payment_id)
+                WHERE p.external_payment_id = v.external_payment_id
+                  AND p.invoice_id IS NULL
+                """,
+                update_tuples,
+                page_size=1000,
+            )
+        raw_conn.commit()
+        updated = len(update_tuples)
+    except Exception as exc:
+        raw_conn.rollback()
+        raise
+    finally:
+        raw_conn.close()
+
+    logger.info(f"✅  Payments updated with invoice_id: {updated:,}")
+    return updated
 
 
 # =============================================================================
@@ -478,7 +601,8 @@ def _write_skipped(skipped: list[dict], run_ts: str):
 
 
 def _print_summary(run_ts: str, dry_run: bool, inserted: int,
-                   skipped_dup: int, skipped_no_match: int):
+                   skipped_dup: int, skipped_no_match: int,
+                   payments_linked: int = 0):
     from scripts.logger import LOG_FILE, ERROR_CSV
     lines = [
         "=" * 65,
@@ -486,9 +610,10 @@ def _print_summary(run_ts: str, dry_run: bool, inserted: int,
         f"  Run timestamp  : {run_ts}",
         f"  Dry run        : {dry_run}",
         "=" * 65,
-        f"  Inserted                      : {inserted:,}",
-        f"  Skipped (already imported)    : {skipped_dup:,}",
-        f"  Skipped (no ledger_charges match): {skipped_no_match:,}",
+        f"  Invoices inserted                   : {inserted:,}",
+        f"  Skipped (already imported)          : {skipped_dup:,}",
+        f"  Skipped (no ledger_charges match)   : {skipped_no_match:,}",
+        f"  Payments linked (invoice_id set)    : {payments_linked:,}",
         "=" * 65,
         f"  Log file  : {LOG_FILE}",
         f"  Error CSV : {ERROR_CSV}",
@@ -578,10 +703,18 @@ def main(args=None):
     elif records:
         inserted = insert_invoices(records, engine, batch_size)
 
+    # Link payments → invoices (set payments.invoice_id)
+    payments_linked = 0
+    if records:
+        payments_linked = link_payments_to_invoices(records, engine, dry_run)
+        if not dry_run:
+            print(f"  Payments linked : {payments_linked:,}", flush=True)
+
     _write_skipped(skipped, run_ts)
     _print_summary(run_ts, dry_run, inserted,
                    skipped_dup=len(existing_ids),
-                   skipped_no_match=len(skipped))
+                   skipped_no_match=len(skipped),
+                   payments_linked=payments_linked)
     close_logger()
 
 

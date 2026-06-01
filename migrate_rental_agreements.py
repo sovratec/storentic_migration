@@ -56,6 +56,7 @@ import sys
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
+from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
@@ -248,20 +249,18 @@ def transform_row(
     }
 
 
-# ── Duplicate check ────────────────────────────────────────────────────────────
+# ── Existing pairs pre-load (replaces per-row rental_agreement_exists queries) ─
 
-def rental_agreement_exists(conn, customer_id: int, unit_id: int) -> bool:
-    """
-    Check if a rental_agreement record already exists for this customer-unit pair.
-    Dedup key: customer_id + unit_id (composite).
-    """
+def load_existing_pairs(engine) -> set[tuple]:
+    """Pre-load all (customer_id, unit_id) pairs already in rental_agreements."""
     from sqlalchemy import text as sa_text
-    result = conn.execute(sa_text(
-        "SELECT id FROM storentic.rental_agreements "
-        "WHERE customer_id = :cid AND unit_id = :uid "
-        "LIMIT 1"
-    ), {"cid": customer_id, "uid": unit_id})
-    return result.fetchone() is not None
+    with engine.connect() as conn:
+        rows = conn.execute(sa_text(
+            "SELECT customer_id, unit_id FROM storentic.rental_agreements"
+        )).fetchall()
+    pairs = {(r.customer_id, r.unit_id) for r in rows}
+    logger.info(f"📋  existing_pairs loaded: {len(pairs)} entries")
+    return pairs
 
 
 # ── SQL statements ─────────────────────────────────────────────────────────────
@@ -292,33 +291,18 @@ _INSERT_SQL = """
         created_datetime,
         updated_datetime,
         version
-    ) VALUES (
-        :customer_id,
-        :unit_id,
-        :facility_id,
-        :move_in_date,
-        :lease_date,
-        :paid_through_date,
-        :schedule_date,
-        :move_out_date,
-        :rental_rate_in_cents,
-        :schedule_rate_in_cents,
-        :rate_variance_in_cents,
-        :security_deposit_in_cents,
-        :insurance_option,
-        :insurance_rate_in_cents,
-        :charge_day,
-        :status,
-        :promo_code,
-        :promo_discount_in_cents,
-        :notes,
-        :created_by,
-        :updated_by,
-        :created_datetime,
-        :updated_datetime,
-        :version
-    )
+    ) VALUES %s
 """
+
+_INSERT_COLS = [
+    "customer_id", "unit_id", "facility_id",
+    "move_in_date", "lease_date", "paid_through_date",
+    "schedule_date", "move_out_date",
+    "rental_rate_in_cents", "schedule_rate_in_cents", "rate_variance_in_cents",
+    "security_deposit_in_cents", "insurance_option", "insurance_rate_in_cents",
+    "charge_day", "status", "promo_code", "promo_discount_in_cents",
+    "notes", "created_by", "updated_by", "created_datetime", "updated_datetime", "version",
+]
 
 _UPDATE_SQL = """
     UPDATE storentic.rental_agreements SET
@@ -429,9 +413,11 @@ def main(args=None):
     df, col_map = validate(args.file, mode="rental_agreement")
 
     # ── Step 2: Load lookup caches ────────────────────────────────────────────
-    engine = None
-    customer_map = {}
-    unit_map = {}
+    engine         = None
+    customer_map   = {}
+    unit_map       = {}
+    existing_pairs: set[tuple] = set()
+    batch_size     = int(os.getenv("BATCH_SIZE", 500))
 
     if output_mode == "db" and not dry_run:
         try:
@@ -441,72 +427,87 @@ def main(args=None):
             with engine.connect() as conn:
                 customer_map = load_customer_map(conn, loc_id)
                 unit_map     = load_unit_map(conn, loc_id)
-
+            existing_pairs = load_existing_pairs(engine)
         except ImportError:
             logger.error("❌  sqlalchemy / psycopg2 not installed. Run: pip install sqlalchemy psycopg2-binary")
             sys.exit(1)
     else:
         logger.info("ℹ️   Dry-run / Excel mode: skipping DB connection and lookup cache load.")
 
-    # ── Step 3: Process rows ──────────────────────────────────────────────────
+    # ── Step 3: Transform all rows ────────────────────────────────────────────
     stats = {
         "total": 0, "inserted": 0, "updated": 0,
         "skipped": 0, "errors": 0, "dry_run": dry_run,
         "output_mode": output_mode,
     }
-    excel_records = []
+    excel_records  = []
+    new_records    = []
+    update_records = []
 
-    for row_idx, row in df.iterrows():
+    for row in df.itertuples(index=False):
         stats["total"] += 1
-
-        record = transform_row(row_idx, row, col_map, customer_map, unit_map, loc_id, created_by)
-
+        record = transform_row(stats["total"], pd.Series(row._asdict()), col_map, customer_map, unit_map, loc_id, created_by)
         if record is None:
             stats["errors"] += 1
             continue
 
         customer_id = record["customer_id"]
         unit_id     = record["unit_id"]
-        display_key = f"customer_id={customer_id}, unit_id={unit_id}"
+        pair        = (customer_id, unit_id)
 
-        # ── Excel output mode ─────────────────────────────────────────────────
         if output_mode == "excel":
             excel_records.append(record)
-            logger.info(f"📋  Queued for Excel: {display_key}")
             stats["inserted"] += 1
             continue
 
-        # ── DB dry run ────────────────────────────────────────────────────────
         if dry_run:
-            logger.info(f"[DRY RUN] Would upsert rental_agreement: {display_key}")
             stats["inserted"] += 1
             continue
 
-        # ── Live DB write ─────────────────────────────────────────────────────
+        if pair in existing_pairs:
+            if update_existing:
+                update_records.append(record)
+            else:
+                stats["skipped"] += 1
+        else:
+            new_records.append(record)
+            existing_pairs.add(pair)
+
+    # ── Step 4a: Bulk INSERT new records ──────────────────────────────────────
+    if new_records and output_mode == "db" and not dry_run:
+        raw_conn   = engine.raw_connection()
+        raw_cursor = raw_conn.cursor()
+        try:
+            tuples = [tuple(r[c] for c in _INSERT_COLS) for r in new_records]
+            for i in range(0, len(tuples), batch_size):
+                chunk = tuples[i:i + batch_size]
+                execute_values(raw_cursor, _INSERT_SQL, chunk, page_size=batch_size)
+                raw_conn.commit()
+                stats["inserted"] += len(chunk)
+                pct = min(100, stats["inserted"] / len(new_records) * 100)
+                print(f"  {pct:5.1f}%  |  inserted {stats['inserted']:,} / {len(new_records):,}", flush=True)
+        except Exception as exc:
+            raw_conn.rollback()
+            logger.error(f"Bulk insert failed: {exc}")
+            raise
+        finally:
+            raw_cursor.close()
+            raw_conn.close()
+
+    # ── Step 4b: Batch UPDATE existing records (single transaction) ───────────
+    if update_records and output_mode == "db" and not dry_run:
         try:
             from sqlalchemy import text as sa_text
             with engine.begin() as conn:
-                exists = rental_agreement_exists(conn, customer_id, unit_id)
-
-                if exists and not update_existing:
-                    logger.info(f"⏭️   Skipped duplicate: {display_key}")
-                    stats["skipped"] += 1
-
-                elif exists:
+                for record in update_records:
                     conn.execute(sa_text(_UPDATE_SQL), record)
-                    logger.info(f"🔄  Updated: {display_key}")
-                    stats["updated"] += 1
+            stats["updated"] = len(update_records)
+            logger.info(f"    Updated {len(update_records):,} rental_agreement records.")
+        except Exception as exc:
+            log_error(0, "BATCH_UPDATE", "DB_UPDATE", str(exc), None)
+            stats["errors"] += len(update_records)
 
-                else:
-                    conn.execute(sa_text(_INSERT_SQL), record)
-                    logger.info(f"✅  Inserted: {display_key}")
-                    stats["inserted"] += 1
-
-        except Exception as e:
-            log_error(row_idx + 2, display_key, "DB_UPSERT", str(e), display_key)
-            stats["errors"] += 1
-
-    # ── Step 4: Flush Excel file ──────────────────────────────────────────────
+    # ── Step 5: Flush Excel file ──────────────────────────────────────────────
     if output_mode == "excel":
         if excel_records:
             write_to_excel(excel_records, out_file)
@@ -514,7 +515,7 @@ def main(args=None):
         else:
             logger.warning("⚠️   No records to write — Excel file not created.")
 
-    # ── Step 5: Summary ───────────────────────────────────────────────────────
+    # ── Step 6: Summary ───────────────────────────────────────────────────────
     write_summary(stats)
     close_logger()
 

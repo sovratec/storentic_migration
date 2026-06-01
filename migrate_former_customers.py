@@ -49,6 +49,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 from dotenv import load_dotenv
+from psycopg2.extras import execute_values
 from sqlalchemy import text as sa_text
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -61,6 +62,22 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── SQL (same table as migrate_customers.py) ───────────────────────────────────
+
+_INSERT_COLS = [
+    "external_id", "external_source",
+    "first_name", "last_name", "company_name",
+    "address1", "address2", "city", "state", "zip", "country", "phone",
+    "alternate_first_name", "alternate_last_name",
+    "alternate_address1", "alternate_address2",
+    "alternate_city", "alternate_state", "alternate_zip",
+    "alternate_country", "alternate_phone",
+    "email", "alternate_email",
+    "mobile", "access_gate_code",
+    "driver_license_id", "driver_license_issue_state",
+    "organization_id", "location_id",
+    "customer_status_id",
+    "created_by", "updated_by", "created_datetime", "updated_datetime",
+]
 
 _INSERT_SQL = """
     INSERT INTO storentic.customer (
@@ -77,21 +94,8 @@ _INSERT_SQL = """
         organization_id, location_id,
         customer_status_id,
         created_by, updated_by, created_datetime, updated_datetime
-    ) VALUES (
-        :external_id, :external_source,
-        :first_name, :last_name, :company_name,
-        :address1, :address2, :city, :state, :zip, :country, :phone,
-        :alternate_first_name, :alternate_last_name,
-        :alternate_address1, :alternate_address2,
-        :alternate_city, :alternate_state, :alternate_zip,
-        :alternate_country, :alternate_phone,
-        :email, :alternate_email,
-        :mobile, :access_gate_code,
-        :driver_license_id, :driver_license_issue_state,
-        :organization_id, :location_id,
-        :customer_status_id,
-        :created_by, :updated_by, :created_datetime, :updated_datetime
-    )
+    ) VALUES %s
+    ON CONFLICT (external_id) WHERE external_id IS NOT NULL DO NOTHING
 """
 
 _UPDATE_SQL = """
@@ -243,6 +247,7 @@ def process(
     engine,
     out_file: str,
     external_source: str | None = None,
+    batch_size: int = 500,
 ) -> dict:
 
     stats = {
@@ -250,17 +255,19 @@ def process(
         "skipped_dup": 0, "errors": 0,
         "dry_run": dry_run, "output_mode": output_mode,
     }
-    excel_records = []
+    excel_records  = []
+    new_records    = []
+    update_records = []
     total = len(df)
     print(f"  Processing {total:,} former customers ...\n", flush=True)
 
-    for row_idx, row in df.iterrows():
+    for row_idx, row in enumerate(df.itertuples(index=False)):
         stats["total"] += 1
 
         try:
-            record = transform_row(row, org_id, loc_id, created_by, external_source)
+            record = transform_row(pd.Series(row._asdict()), org_id, loc_id, created_by, external_source)
         except Exception as exc:
-            log_error(row_idx + 2, row.get("LASTNAME", ""), "TRANSFORM", str(exc), None)
+            log_error(row_idx + 2, getattr(row, "LASTNAME", ""), "TRANSFORM", str(exc), None)
             stats["errors"] += 1
             continue
 
@@ -295,49 +302,48 @@ def process(
             stats["inserted"] += 1
             continue
 
-        # Live DB write
-        try:
-            with engine.begin() as conn:
-                exists = conn.execute(sa_text(
-                    "SELECT id FROM storentic.customer "
-                    "WHERE external_id = :eid LIMIT 1"
-                ), {"eid": ext_id}).fetchone()
+        # Classify for bulk write
+        new_records.append(record)
+        existing_ids.add(ext_id)
 
-                if exists:
-                    conn.execute(sa_text(_UPDATE_SQL), record)
-                    logger.debug(f"Updated : {display_name} ({ext_id})")
-                    stats["updated"] += 1
-                else:
-                    conn.execute(sa_text(_INSERT_SQL), record)
-                    logger.debug(f"Inserted: {display_name} ({ext_id})")
-                    stats["inserted"] += 1
-
-            existing_ids.add(ext_id)
-
-        except Exception as exc:
-            exc_str = str(exc)
-            is_conn_err = any(k in exc_str for k in (
-                "could not translate host name", "could not connect",
-                "connection refused", "OperationalError", "timeout",
-            ))
-            if is_conn_err:
-                print(f"\n  ERROR: DB connection lost — {exc_str[:120]}\n"
-                      f"  Re-run the script; already-imported rows will be skipped.\n",
-                      flush=True)
-                raise SystemExit(1)
-            log_error(row_idx + 2, display_name, "DB_INSERT", exc_str, ext_id)
-            stats["errors"] += 1
-
-        # Progress every 500 rows
-        if stats["total"] % 500 == 0:
+        # Progress every batch_size rows
+        if stats["total"] % batch_size == 0:
             pct = stats["total"] / total * 100
             print(
                 f"  {pct:5.1f}%  |  {stats['total']:,}/{total:,}"
-                f"  inserted={stats['inserted']:,}"
+                f"  queued={len(new_records):,}"
                 f"  skipped={stats['skipped_dup']:,}"
                 f"  errors={stats['errors']:,}",
                 flush=True,
             )
+
+    # ── Bulk INSERT new records ───────────────────────────────────────────────
+    if new_records and not dry_run and output_mode == "db":
+        raw_conn = engine.raw_connection()
+        try:
+            with raw_conn.cursor() as cur:
+                execute_values(
+                    cur,
+                    _INSERT_SQL,
+                    [tuple(r[c] for c in _INSERT_COLS) for r in new_records],
+                    page_size=batch_size,
+                )
+            raw_conn.commit()
+        except Exception as exc:
+            raw_conn.rollback()
+            raise
+        finally:
+            raw_conn.close()
+        stats["inserted"] = len(new_records)
+        logger.info(f"✅  Bulk inserted {stats['inserted']:,} former customers.")
+
+    # ── Batch UPDATE existing records ─────────────────────────────────────────
+    if update_records and not dry_run and output_mode == "db":
+        with engine.begin() as conn:
+            for record in update_records:
+                conn.execute(sa_text(_UPDATE_SQL), record)
+        stats["updated"] = len(update_records)
+        logger.info(f"🔄  Updated {stats['updated']:,} former customers.")
 
     # Flush Excel
     if output_mode == "excel" and excel_records:
@@ -437,6 +443,7 @@ def main(args=None):
         existing_ids = load_existing_external_ids(engine)
 
     # Step 4: Process
+    batch_size = int(os.getenv("BATCH_SIZE", 500))
     stats = process(
         df              = former_df,
         org_id          = org_id,
@@ -448,6 +455,7 @@ def main(args=None):
         engine          = engine,
         out_file        = out_file,
         external_source = external_source,
+        batch_size      = batch_size,
     )
 
     # Step 5: Summary

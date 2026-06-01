@@ -4,33 +4,29 @@ migrate_ledger_charges.py — ETL script: SiteLink Select Charges → storentic.
 Usage :
     # Dry run (preview row counts, no DB writes)
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-charges      "data/Charges.csv" \\
         --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
         --file-charge-types data/ChargeType.csv \\
-        --file-charge-desc  data/ChargeDesc.csv \\
         --output db --dry-run
 
     # Export to Excel for review before DB import
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-charges      "data/Charges.csv" \\
         --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
         --file-charge-types data/ChargeType.csv \\
-        --file-charge-desc  data/ChargeDesc.csv \\
         --output excel
 
     # Production import
     python migrate_ledger_charges.py \\
-        --file-charges      "data/Powdersville Self Storage - Select Charges_20260505.csv" \\
+        --file-charges      "data/Charges.csv" \\
         --file-tenants      "data/Tenants_Units_Ledgers_Access_20260502.csv" \\
         --file-charge-types data/ChargeType.csv \\
-        --file-charge-desc  data/ChargeDesc.csv \\
         --output db
 
 Arguments:
     --file-charges      Path to SiteLink Select Charges CSV file (required)
     --file-tenants      Path to Tenants+Units+Ledgers+Access CSV file (required)
     --file-charge-types Path to ChargeType.csv mapping file (required)
-    --file-charge-desc  Path to ChargeDesc.csv — provides sChgDesc for memo column (required)
     --output            'db' (default) or 'excel'
     --out-file          [excel mode] Output Excel file path
     --dry-run           [db mode] Preview without writing to DB
@@ -57,10 +53,11 @@ Join chain (how SiteLink charges map to Storentic records):
     ChargeDescID ──────────────────► ChargeType.csv                   → charge_type_id
 
 Status logic:
-    bNSF = True OR dDeleted not null  →  REVERSED
-    otherwise                         →  POSTED
+    dDeleted is null  →  POSTED
+    (rows with dDeleted not null are skipped entirely — not imported)
 
 Skipped rows (written to output/ledger_charges_skipped_<ts>.xlsx):
+    - dDeleted not null (voided/deleted in SiteLink, incl. abandoned same-day units)
     - LedgerID not found in Tenants file / no matching customer
     - ChargeDescID not in ChargeType.csv mapping
 """
@@ -151,36 +148,6 @@ def load_charge_type_map(charge_types_file: str) -> dict:
     logger.info(f"    ChargeDescID mappings loaded: {len(mapping)}")
     return mapping
 
-
-def load_charge_desc_map(charge_desc_file: str) -> dict:
-    """
-    Read ChargeDesc.csv and return {ChargeDescID (int): sChgDesc (str)}.
-    Used to populate the memo column in ledger_charges.
-    """
-    logger.info(f"📂  Loading charge description mapping: {charge_desc_file}")
-    df = pd.read_csv(charge_desc_file, dtype=str, encoding='utf-8')
-    df = df.drop(columns=["Totals & Averages"], errors="ignore")
-    df.columns = df.columns.str.strip().str.upper()
-
-    if "CHARGEDESCID" not in df.columns or "SCHGDESC" not in df.columns:
-        raise SystemExit(
-            f"❌  ChargeDesc file must contain 'CHARGEDESCID' and 'SCHGDESC' columns.\n"
-            f"    Found: {list(df.columns[:20])}"
-        )
-
-    mapping = {}
-    for _, row in df.iterrows():
-        if pd.isna(row.get("CHARGEDESCID")):
-            continue
-        try:
-            desc_id = int(float(row["CHARGEDESCID"]))
-            memo    = str(row["SCHGDESC"]).strip() if pd.notna(row.get("SCHGDESC")) else None
-            mapping[desc_id] = memo
-        except (ValueError, TypeError):
-            continue
-
-    logger.info(f"    ChargeDesc memo mappings loaded: {len(mapping)}")
-    return mapping
 
 
 def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
@@ -344,29 +311,21 @@ def _to_cents(val) -> int:
 
 
 def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int,
-                  loc_id: int, org_id: int, created_by: int, memo: str = None) -> dict:
+                  loc_id: int, org_id: int, created_by: int) -> dict:
     """Transform one Select Charges row into a ledger_charges insert dict."""
 
-    charge_id   = str(int(float(row["CHARGEID"])))
-    dc_amt      = row.get("DCAMT")
-    d_chg_strt  = _parse_dt(row.get("DCHGSTRT"))
-    d_created   = _parse_dt(row.get("DCREATED"))
-    d_updated   = _parse_dt(row.get("DUPDATED"))
-    d_deleted   = _parse_dt(row.get("DDELETED"))
-    b_nsf       = bool(row.get("BNSF", False))
-    now         = datetime.utcnow()
+    charge_id  = str(int(float(row["CHARGEID"])))
+    dc_amt     = row.get("DCAMT")
+    d_chg_strt = _parse_dt(row.get("DCHGSTRT"))
+    d_created  = _parse_dt(row.get("DCREATED"))
+    d_updated  = _parse_dt(row.get("DUPDATED"))
+    now        = datetime.utcnow()
 
-    # Status logic — only dDeleted drives REVERSED; bNSF does not affect status
-    is_reversed = d_deleted is not None
-    status      = "REVERSED" if is_reversed else "POSTED"
+    # memo — read directly from SCHGDESC column in Charges.csv
+    raw_memo = row.get("SCHGDESC")
+    memo = str(raw_memo).strip() if pd.notna(raw_memo) and str(raw_memo).strip() not in ("", "nan") else None
 
-    # Reversal metadata
-    reversed_at     = None
-    reversal_reason = None
-    if is_reversed:
-        reversed_at     = d_deleted
-        reversal_reason = "Deleted in SiteLink"
-
+    # Deleted charges are filtered out before transform — all rows here are POSTED
     return {
         "external_charge_id": charge_id,
         "customer_id":        customer_id,
@@ -378,12 +337,12 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
         "effective_date":     d_chg_strt or d_created or now,
         "memo":               memo,
         "internal_note":      None,
-        "status":             status,
+        "status":             "POSTED",
         "invoice_id":         None,
         "source_screen":      "MIGRATION",
         "reversed_by_id":     None,
-        "reversed_at":        reversed_at,
-        "reversal_reason":    reversal_reason,
+        "reversed_at":        None,
+        "reversal_reason":    None,
         "created_by":         created_by,
         "created_at":         d_created or now,
         "updated_at":         d_updated or now,
@@ -402,7 +361,6 @@ def _record_to_tuple(record: dict) -> tuple:
 def process_charges(
     charges_file: str,
     charge_type_map: dict,
-    charge_desc_map: dict,
     ledger_to_tenant: dict,
     ledger_to_unitname: dict,
     customer_map: dict,
@@ -429,11 +387,20 @@ def process_charges(
 
     stats = {
         "total": total_raw, "inserted": 0, "skipped_dup": 0,
-        "skipped_no_cust": 0, "skipped_no_ct": 0,
+        "skipped_deleted": 0, "skipped_no_cust": 0, "skipped_no_ct": 0,
         "errors": 0, "dry_run": dry_run, "output_mode": output_mode,
     }
 
     # ── Step 1: Vectorized pre-filter ─────────────────────────────────────────
+
+    # Drop deleted/voided charges (DDELETED not null).
+    # This includes all charges belonging to same-day-cancelled (abandoned) units
+    # whose entire charge history was deleted in SiteLink.
+    if "DDELETED" in df.columns:
+        deleted_mask = df["DDELETED"].notna() & (df["DDELETED"].str.strip() != "")
+        stats["skipped_deleted"] = int(deleted_mask.sum())
+        df = df[~deleted_mask].copy()
+    logger.info(f"    Skipped deleted charges  : {stats['skipped_deleted']:,}")
 
     # Parse ChargeDescID and LedgerID as integers; drop unparseable rows
     df["CHARGEDESCID_INT"] = pd.to_numeric(df["CHARGEDESCID"], errors="coerce")
@@ -469,9 +436,6 @@ def process_charges(
         lambda u: unit_map.get(str(u).strip()) if pd.notna(u) else None
     )
 
-    # Resolve memo from charge_desc_map
-    df["_memo"] = df["CHARGEDESCID_INT"].map(charge_desc_map)
-
     # Build external_charge_id and dedup
     df["ext_charge_id"] = df["CHARGEID"].apply(lambda x: str(int(float(x))))
     dup_mask = df["ext_charge_id"].isin(existing_ids)
@@ -479,6 +443,7 @@ def process_charges(
     df = df[~dup_mask].copy().reset_index(drop=True)
 
     logger.info(f"    After pre-filter      : {len(df):,} rows to process")
+    logger.info(f"    Skipped deleted       : {stats['skipped_deleted']:,}")
     logger.info(f"    Skipped no-customer   : {stats['skipped_no_cust']:,}")
     logger.info(f"    Skipped no-chargetype : {stats['skipped_no_ct']:,}")
     logger.info(f"    Skipped duplicates    : {stats['skipped_dup']:,}")
@@ -523,7 +488,6 @@ def process_charges(
                     unit_id        = rd["unit_id"] if pd.notna(rd.get("unit_id")) else None,
                     charge_type_id = rd["charge_type_id"],
                     loc_id=loc_id, org_id=org_id, created_by=created_by,
-                    memo=rd.get("_memo"),
                 )
                 excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
                 stats["inserted"] += 1
@@ -588,7 +552,6 @@ def process_charges(
                 unit_id        = unit_id,
                 charge_type_id = rd["charge_type_id"],
                 loc_id=loc_id, org_id=org_id, created_by=created_by,
-                memo=rd.get("_memo"),
             )
             batch_tuples.append(_record_to_tuple(record))
             batch_ids.append(charge_id)
@@ -656,6 +619,7 @@ def _print_summary(stats: dict, run_ts: str):
         "=" * 65,
         f"  Total rows read             : {stats.get('total', 0):,}",
         f"  Successfully written        : {stats.get('inserted', 0):,}",
+        f"  Skipped (deleted/voided)    : {stats.get('skipped_deleted', 0):,}",
         f"  Skipped (already imported)  : {stats.get('skipped_dup', 0):,}",
         f"  Skipped (no customer match) : {stats.get('skipped_no_cust', 0):,}",
         f"  Skipped (no charge type)    : {stats.get('skipped_no_ct', 0):,}",
@@ -690,8 +654,6 @@ def parse_args(args=None):
                         help="Path to Tenants+Units+Ledgers+Access CSV file")
     parser.add_argument("--file-charge-types", required=True,
                         help="Path to ChargeType.csv mapping file")
-    parser.add_argument("--file-charge-desc", required=True,
-                        help="Path to ChargeDesc.csv — provides sChgDesc for memo column")
     parser.add_argument("--output",   default="db", choices=["db", "excel"],
                         help="Output destination: 'db' (default) or 'excel'")
     parser.add_argument("--out-file", default=None,
@@ -727,7 +689,7 @@ def main(args=None):
     logger.info(f"Charges file      : {args.file_charges}")
     logger.info(f"Tenants file      : {args.file_tenants}")
     logger.info(f"Charge types file : {args.file_charge_types}")
-    logger.info(f"Charge desc file  : {args.file_charge_desc}")
+    logger.info(f"Memo source       : SCHGDESC column in Charges.csv")
     logger.info(f"Output mode       : {output_mode.upper()}")
     logger.info(f"Dry run           : {dry_run}")
     logger.info(f"Org / Loc / CreatedBy : {org_id} / {loc_id} / {created_by}")
@@ -747,9 +709,8 @@ def main(args=None):
     check_external_charge_id_column(engine)
 
     # ── Load source file maps ─────────────────────────────────────────────────
-    charge_type_map                    = load_charge_type_map(args.file_charge_types)
-    charge_desc_map                    = load_charge_desc_map(args.file_charge_desc)
-    ledger_to_tenant, ledger_to_unit   = load_tenants_maps(args.file_tenants)
+    charge_type_map                  = load_charge_type_map(args.file_charge_types)
+    ledger_to_tenant, ledger_to_unit = load_tenants_maps(args.file_tenants)
 
     # ── Load DB lookup maps ───────────────────────────────────────────────────
     customer_map = load_customer_map(engine, org_id)
@@ -760,7 +721,6 @@ def main(args=None):
     stats = process_charges(
         charges_file        = args.file_charges,
         charge_type_map     = charge_type_map,
-        charge_desc_map     = charge_desc_map,
         ledger_to_tenant    = ledger_to_tenant,
         ledger_to_unitname  = ledger_to_unit,
         customer_map        = customer_map,

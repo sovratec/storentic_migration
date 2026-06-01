@@ -6,18 +6,21 @@ Usage :
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
         --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
+        --file-credits  data/Credits.csv \\
         --output db --dry-run
 
     # Export to Excel for review before DB import
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
         --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
+        --file-credits  data/Credits.csv \\
         --output excel
 
     # Production import
     python migrate_payments.py \\
         --file-payments data/Payments.csv \\
         --file-tenants  "data/Tenants+Units+Ledgers+Access.csv" \\
+        --file-credits  data/Credits.csv \\
         --output db
 
 Arguments:
@@ -224,6 +227,34 @@ def build_ledger_to_customer_map(
     return ledger_to_customer
 
 
+def load_credit_payment_ids(credits_file: str) -> set[str]:
+    """
+    Read Credits.csv and return the set of PaymentIDs that represent credit
+    transactions.  These payments are already imported as negative ledger_charges
+    by migrate_credits.py, so they must NOT also be imported as payment rows
+    (that would double-count the credit and push the balance negative).
+    """
+    logger.info(f"📂  Loading credits file for dedup: {credits_file}")
+    try:
+        df = pd.read_csv(credits_file, dtype=str, encoding="utf-8")
+    except UnicodeDecodeError:
+        df = pd.read_csv(credits_file, dtype=str, encoding="latin-1")
+    df = df.drop(columns=["Totals & Averages", "TOTALS & AVERAGES"], errors="ignore")
+    df.columns = df.columns.str.strip().str.upper()
+
+    if "PAYMENTID" not in df.columns:
+        logger.warning("Credits file has no PAYMENTID column — credit dedup skipped.")
+        return set()
+
+    ids = {
+        str(int(float(v)))
+        for v in df["PAYMENTID"].dropna()
+        if str(v).strip() not in ("", "nan")
+    }
+    logger.info(f"    Credit PaymentIDs loaded: {len(ids):,}  (will be excluded from payments)")
+    return ids
+
+
 def load_existing_external_ids(engine) -> set[str]:
     """
     Load all external_id values already present in storentic.payments.
@@ -299,6 +330,7 @@ def process_payments(
     engine,
     out_file: str,
     batch_size: int,
+    credit_payment_ids: set[str] | None = None,
 ) -> dict:
     """
     Main processing loop.
@@ -318,15 +350,17 @@ def process_payments(
     logger.info(f"    Total payment rows: {total_raw:,}")
 
     stats = {
-        "total"           : total_raw,
-        "inserted"        : 0,
-        "skipped_dup"     : 0,
-        "skipped_no_cust" : 0,
-        "skipped_zero_amt": 0,
-        "errors"          : 0,
-        "failed_payments" : 0,
-        "dry_run"         : dry_run,
-        "output_mode"     : output_mode,
+        "total"             : total_raw,
+        "inserted"          : 0,
+        "skipped_dup"       : 0,
+        "skipped_deleted"   : 0,
+        "skipped_credits"   : 0,
+        "skipped_no_cust"   : 0,
+        "skipped_zero_amt"  : 0,
+        "errors"            : 0,
+        "failed_payments"   : 0,
+        "dry_run"           : dry_run,
+        "output_mode"       : output_mode,
     }
 
     # ── Step 1: Pre-filter with vectorized pandas (fast) ─────────────────────
@@ -350,6 +384,25 @@ def process_payments(
     stats["skipped_zero_amt"] = int(zero_amt)
     df = df[df["DCPMTAMT_NUM"] != 0].copy()
 
+    # Drop deleted/voided payments (DDELETED not null).
+    # These were reversed in SiteLink and should not appear in the migrated ledger.
+    if "DDELETED" in df.columns:
+        deleted_mask = df["DDELETED"].notna() & (df["DDELETED"].str.strip() != "")
+        stats["skipped_deleted"] = int(deleted_mask.sum())
+        df = df[~deleted_mask].copy()
+
+    # Drop credit payments — their PaymentID exists in Credits.csv, meaning
+    # migrate_credits.py already imported them as negative ledger_charges.
+    # Importing them here too would double-count the credit and push balances negative.
+    if credit_payment_ids:
+        df["_pid_str"] = df["PAYMENTID"].apply(
+            lambda x: str(int(float(x))) if pd.notna(x) and str(x).strip() not in ("", "nan") else None
+        )
+        credit_mask = df["_pid_str"].isin(credit_payment_ids)
+        stats["skipped_credits"] = int(credit_mask.sum())
+        df = df[~credit_mask].drop(columns=["_pid_str"]).copy()
+    logger.info(f"    Skipped credit payments  : {stats['skipped_credits']:,}")
+
     # Drop already-imported PaymentIDs
     df["ext_id"] = df["PAYMENTID"].apply(
         lambda x: PT.derive_external_id(x) if pd.notna(x) else None
@@ -360,10 +413,12 @@ def process_payments(
     df = df[~dup_mask].copy()
     df = df.reset_index(drop=True)
 
-    logger.info(f"    After pre-filter   : {len(df):,} rows to process")
-    logger.info(f"    Skipped no-customer: {stats['skipped_no_cust']:,}")
-    logger.info(f"    Skipped zero-amount: {stats['skipped_zero_amt']:,}")
-    logger.info(f"    Skipped duplicates : {stats['skipped_dup']:,}")
+    logger.info(f"    After pre-filter      : {len(df):,} rows to process")
+    logger.info(f"    Skipped no-customer   : {stats['skipped_no_cust']:,}")
+    logger.info(f"    Skipped zero-amount   : {stats['skipped_zero_amt']:,}")
+    logger.info(f"    Skipped deleted/voided: {stats['skipped_deleted']:,}")
+    logger.info(f"    Skipped credits       : {stats['skipped_credits']:,}")
+    logger.info(f"    Skipped duplicates    : {stats['skipped_dup']:,}")
     print(f"  {len(df):,} rows to insert after filtering\n", flush=True)
 
     if dry_run:
@@ -460,7 +515,9 @@ def write_summary(stats: dict, run_ts: str):
         "=" * 65,
         f"  Total rows read           : {stats.get('total', 0):,}",
         f"  Successfully written       : {stats.get('inserted', 0):,}",
-        f"    of which FAILED status   : {stats.get('failed_payments', 0):,}  (NSF / voided)",
+        f"    of which FAILED status   : {stats.get('failed_payments', 0):,}  (NSF)",
+        f"  Skipped (credit payments) : {stats.get('skipped_credits', 0):,}  (already in ledger_charges via Credits.csv)",
+        f"  Skipped (deleted/voided)  : {stats.get('skipped_deleted', 0):,}",
         f"  Skipped (already exist)   : {stats.get('skipped_dup', 0):,}",
         f"  Skipped (no customer)     : {stats.get('skipped_no_cust', 0):,}",
         f"  Skipped (zero amount)     : {stats.get('skipped_zero_amt', 0):,}",
@@ -494,6 +551,11 @@ def parse_args(args=None):
     parser.add_argument(
         "--file-tenants", required=True,
         help="Path to Tenants+Units+Ledgers+Access.csv (SiteLink export)",
+    )
+    parser.add_argument(
+        "--file-credits", default=None,
+        help="Path to Credits.csv — PaymentIDs here are excluded from payments import "
+             "(they are already loaded as negative ledger_charges by migrate_credits.py)",
     )
     parser.add_argument(
         "--output", default="db", choices=["db", "excel"],
@@ -535,6 +597,7 @@ def main(args=None):
     logger.info("STORENTIC PAYMENTS ETL MIGRATION STARTING")
     logger.info(f"Payments file : {args.file_payments}")
     logger.info(f"Tenants file  : {args.file_tenants}")
+    logger.info(f"Credits file  : {args.file_credits or 'not provided'}")
     logger.info(f"Output mode   : {output_mode.upper()}")
     logger.info(f"Dry run       : {dry_run}")
     logger.info(f"Org / Loc / CreatedBy: {org_id} / {loc_id} / {created_by}")
@@ -556,13 +619,23 @@ def main(args=None):
     tenant_to_customer = load_storentic_customers(engine, org_id)
     ledger_to_customer = build_ledger_to_customer_map(ledger_to_tenant, tenant_to_customer)
 
-    # ── Step 2: Load existing external_ids for deduplication ──────────────────
+    # ── Step 2: Load credit PaymentIDs to exclude (if Credits.csv provided) ───
+    credit_payment_ids: set[str] = set()
+    if args.file_credits:
+        credit_payment_ids = load_credit_payment_ids(args.file_credits)
+    else:
+        logger.warning("--file-credits not provided; credit payments will NOT be excluded.")
+        print("  ⚠️   --file-credits not provided — credit payments (already in ledger_charges) "
+              "will be imported as payments too. Pass --file-credits data/Credits.csv to avoid "
+              "double-counting credits.\n", flush=True)
+
+    # ── Step 3: Load existing external_ids for deduplication ──────────────────
     existing_ids: set[str] = set()
     if output_mode == "db" and not dry_run:
         existing_ids = load_existing_external_ids(engine)
     # In dry-run or excel mode we still de-dup within the run using an empty set
 
-    # ── Step 3: Process payments ───────────────────────────────────────────────
+    # ── Step 4: Process payments ───────────────────────────────────────────────
     stats = process_payments(
         payments_file      = args.file_payments,
         ledger_to_customer = ledger_to_customer,
@@ -575,6 +648,7 @@ def main(args=None):
         engine             = engine,
         out_file           = out_file,
         batch_size         = batch_size,
+        credit_payment_ids = credit_payment_ids,
     )
 
     # ── Step 4: Print summary ──────────────────────────────────────────────────

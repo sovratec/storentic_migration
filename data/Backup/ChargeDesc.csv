@@ -1,0 +1,57 @@
+ChargeDescID,sChgDesc
+763,Security Deposit
+764,Outstanding Rent Balance
+765,Rent
+766,Equipment Rental
+767,Reservation Fee
+768,Invoice Fee
+769,Lock Cut Fee
+770,Damages and Repairs
+771,Auction Fee
+772,Administrative Adjustment
+773,Administrative Fee
+774,Transfer Fee
+775,Late Fee
+776,Late Fee #2
+777,Late Fee #3
+778,NSF Fee
+779,Outstanding Fee Balance
+780,Delivery Fee
+781,Add Warehouse Storage: IBO
+782,Warehouse Termination: OBO
+783,Insurance
+784,Recurring Charge 1
+785,Recurring Charge 2
+786,Recurring Charge 3
+787,Recurring Charge 4
+788,Recurring Charge 5
+789,Recurring Charge 6
+790,Recurring Charge 7
+791,Recurring Charge 8
+792,Delivery: DE
+793,Re-Delivery: DF
+794,Relocation: CC
+795,Move-In: RF
+796,Final Pickup: RE
+2245,small box
+2247,med box
+2248,large box
+2249,extra larg box
+2250,wardrobe boxes
+2251,Pad locks
+2252,Disc Locks
+2253,med box
+5105,Late Fee #4
+5153,Late Fee #5
+6244,Convenience Fee
+9918,Rent Refund Dismissed
+11687,Auction Proceeds
+11815,Default
+12217,Insurance Refund Dismissed
+13967,Security Deposit Dismissed
+19444,Lock Replacement Fee
+31638,Power in unit
+31969,Insufficient Notice Fee
+32440,Storage Treasures fees
+38661,Lien Fee
+39408,Credit Card Surcharge
