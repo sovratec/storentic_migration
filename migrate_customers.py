@@ -80,6 +80,7 @@ COL_MOBILE      = "SMOBILE"
 COL_ACCESS_CODE = "SACCESSCODE"
 COL_LICENSE     = "SLICENSE"
 COL_LIC_REGION  = "SLICREGION"
+COL_EMPLOYEE_ID = "EMPLOYEEID"
 
 
 # ── Row transformer ────────────────────────────────────────────────────────────
@@ -107,6 +108,8 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
     record = {
         "external_id":                  external_id,
         "external_source":              external_source,
+        "external_employee_id":         T.clean_str(row.get(COL_EMPLOYEE_ID)),
+        "external_system":              "sitelink",
         "first_name":                   T.derive_full_name(get(COL_FNAME), get(COL_MI)),
         "last_name":                    last_name,
         "company_name":                 T.clean_str(get(COL_COMPANY)),
@@ -163,7 +166,7 @@ def load_existing_external_ids(engine, org_id: int) -> set[str]:
 # ── SQL statements ─────────────────────────────────────────────────────────────
 
 _INSERT_COLS = [
-    "external_id", "external_source",
+    "external_id", "external_source", "external_employee_id", "external_system",
     "first_name", "last_name", "company_name",
     "address1", "address2", "city", "state", "zip", "country", "phone",
     "alternate_first_name", "alternate_last_name",
@@ -180,7 +183,7 @@ _INSERT_COLS = [
 
 _INSERT_SQL = """
     INSERT INTO storentic.customer (
-        external_id, external_source,
+        external_id, external_source, external_employee_id, external_system,
         first_name, last_name, company_name,
         address1, address2, city, state, zip, country, phone,
         alternate_first_name, alternate_last_name,

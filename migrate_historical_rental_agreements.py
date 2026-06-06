@@ -68,6 +68,14 @@ from scripts import rental_agreement_transformer as T
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+def _clean_str(value) -> str | None:
+    """Strip and return None for blank/nan values."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return None if s.lower() in ("nan", "none", "") else s
+
+
 # ── Required source columns ────────────────────────────────────────────────────
 REQUIRED_COLS = {
     "TENANTID", "SUNITNAME", "DMOVEDIN", "DMOVEDOUT",
@@ -121,7 +129,8 @@ _INSERT_COLS = [
     "rental_rate_in_cents", "schedule_rate_in_cents", "rate_variance_in_cents",
     "security_deposit_in_cents", "insurance_option", "insurance_rate_in_cents",
     "charge_day", "status", "promo_code", "promo_discount_in_cents",
-    "notes", "created_by", "updated_by", "created_datetime", "updated_datetime",
+    "notes", "external_employee_id", "external_system",
+    "created_by", "updated_by", "created_datetime", "updated_datetime",
     "version",
 ]
 
@@ -146,6 +155,8 @@ _INSERT_SQL = """
         promo_code,
         promo_discount_in_cents,
         notes,
+        external_employee_id,
+        external_system,
         created_by,
         updated_by,
         created_datetime,
@@ -271,6 +282,8 @@ def transform_row(excel_row: int, row: pd.Series,
         "promo_code":                 None,
         "promo_discount_in_cents":    0,
         "notes":                      None,
+        "external_employee_id":       _clean_str(row.get("EMPLOYEEID")),
+        "external_system":            "sitelink",
         "created_by":                 created_by,
         "updated_by":                 created_by,
         "created_datetime":           now,

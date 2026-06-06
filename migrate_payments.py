@@ -99,7 +99,9 @@ _INSERT_SQL = """
         refunded_amount_in_cents,
         reversal_reason,
         reversed_by,
-        reversed_at
+        reversed_at,
+        external_employee_id,
+        external_system
     ) VALUES %s
     ON CONFLICT (external_id) WHERE external_id IS NOT NULL DO NOTHING
 """
@@ -114,6 +116,7 @@ _INSERT_COLS = [
     "stripe_charge_id", "stripe_refund_id",
     "transaction_fee_in_cents", "refunded_amount_in_cents",
     "reversal_reason", "reversed_by", "reversed_at",
+    "external_employee_id", "external_system",
 ]
 
 # Excel output columns (in display order, audit fields last)

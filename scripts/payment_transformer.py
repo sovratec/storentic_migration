@@ -13,6 +13,16 @@ from datetime import datetime
 from typing import Optional
 
 
+# ── String helper ──────────────────────────────────────────────────────────────
+
+def _clean_str(value) -> str | None:
+    """Strip and return None for blank/nan values."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return None if s.lower() in ("nan", "none", "") else s
+
+
 # ── Date parsing ───────────────────────────────────────────────────────────────
 
 # SiteLink exports dates in various formats; try them in order.
@@ -245,6 +255,9 @@ def transform_row(
         "created_by"             : created_by,
         "created_at"             : created_at,
         "updated_at"             : created_at,
+        # External system fields
+        "external_employee_id"      : _clean_str(row.get("EMPLOYEEID")),
+        "external_system"           : "sitelink",
         # Fields not applicable to legacy imports — explicitly set to safe defaults
         "payment_profile_id"        : None,
         "stripe_payment_intent_id"  : None,

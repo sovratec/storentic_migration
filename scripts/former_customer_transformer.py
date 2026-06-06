@@ -105,6 +105,8 @@ def transform_row(
 
     return {
         "external_id":                  external_id,
+        "external_employee_id":         clean_str(g("EMPLOYEEID")),
+        "external_system":              "sitelink",
         "first_name":                   first_name,
         "last_name":                    last_name,
         "company_name":                 clean_str(g("COMPANY")),

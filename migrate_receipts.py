@@ -94,7 +94,9 @@ _INSERT_SQL = """
         superseded_by_receipt_id,
         generated_by_user_id,
         created_at,
-        updated_at
+        updated_at,
+        external_employee_id,
+        external_system
     ) VALUES %s
     ON CONFLICT (receipt_number) DO NOTHING
 """
@@ -121,6 +123,8 @@ _INSERT_COLS = [
     "generated_by_user_id",
     "created_at",
     "updated_at",
+    "external_employee_id",
+    "external_system",
 ]
 
 EXCEL_OUTPUT_COLUMNS = [
@@ -424,6 +428,9 @@ def _build_record(rd: dict) -> dict:
     now          = datetime.utcnow()
     created_at   = receipt_date or now
 
+    emp_raw = rd.get("EMPLOYEEID")
+    emp_id  = str(emp_raw).strip() if emp_raw is not None and str(emp_raw).strip() not in ("", "nan") else None
+
     return {
         "receipt_number":           rd["receipt_number"],
         "payment_id":               rd["payment_id"],
@@ -446,6 +453,8 @@ def _build_record(rd: dict) -> dict:
         "generated_by_user_id":     GENERATED_BY_USER_ID,
         "created_at":               created_at,
         "updated_at":               created_at,
+        "external_employee_id":     emp_id,
+        "external_system":          "sitelink",
     }
 
 

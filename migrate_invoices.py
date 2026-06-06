@@ -89,26 +89,37 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 _CHARGE_TO_INVOICE_TYPE: dict[int, int] = {3: 1, 1: 2, 21: 3, 13: 4}
 _DEFAULT_INVOICE_TYPE_ID = 7
 
+# ── invoice_type_id → invoice_type name (from storentic.invoice_types) ────────
+_INVOICE_TYPE_NAMES: dict[int, str] = {
+    1: "RENTAL",
+    2: "DEPOSIT",
+    3: "INSURANCE",
+    4: "LATE_FEE",
+    5: "MERCHANDISE",
+    6: "CREDIT_MEMO",
+    7: "MISC",
+}
+
 # ── SQL ────────────────────────────────────────────────────────────────────────
 _INSERT_SQL = """
     INSERT INTO storentic.invoices (
         invoice_number, customer_id, location_id, organization_id,
-        invoice_type_id, status, issue_date, due_date,
+        invoice_type_id, invoice_type, status, issue_date, due_date,
         subtotal_in_cents, tax_in_cents, total_in_cents,
         amount_paid_in_cents, balance_in_cents,
         created_by, created_at, updated_at, version,
-        external_invoice_id
+        external_invoice_id, external_employee_id, external_system
     ) VALUES %s
     ON CONFLICT (external_invoice_id) WHERE external_invoice_id IS NOT NULL DO NOTHING
 """
 
 _INSERT_COLS = [
     "invoice_number", "customer_id", "location_id", "organization_id",
-    "invoice_type_id", "status", "issue_date", "due_date",
+    "invoice_type_id", "invoice_type", "status", "issue_date", "due_date",
     "subtotal_in_cents", "tax_in_cents", "total_in_cents",
     "amount_paid_in_cents", "balance_in_cents",
     "created_by", "created_at", "updated_at", "version",
-    "external_invoice_id",
+    "external_invoice_id", "external_employee_id", "external_system",
 ]
 
 SKIPPED_COLUMNS = ["INVOICEID", "IINVOICENUM", "ChargeIDs", "skip_reason"]
@@ -438,12 +449,19 @@ def build_invoice_records(
                 ) if pid
             })
 
+        emp_raw = first.get("EMPLOYEEID")
+        emp_id  = str(emp_raw).strip() if emp_raw is not None and str(emp_raw).strip() not in ("", "nan") else None
+
+        inv_type_id = _invoice_type_id(charge_type_id)
+        inv_type    = _INVOICE_TYPE_NAMES.get(inv_type_id, "MISC")
+
         records.append({
             "invoice_number":       invoice_num,
             "customer_id":          customer_id,
             "location_id":          loc_id,
             "organization_id":      org_id,
-            "invoice_type_id":      _invoice_type_id(charge_type_id),
+            "invoice_type_id":      inv_type_id,
+            "invoice_type":         inv_type,
             "status":               status,
             "issue_date":           issue_date,
             "due_date":             due_date,
@@ -457,6 +475,8 @@ def build_invoice_records(
             "updated_at":           now,
             "version":              0,
             "external_invoice_id":  invoice_id,
+            "external_employee_id": emp_id,
+            "external_system":      "sitelink",
             # ── not written to DB — used only for payment linking ──
             "_payment_ids":         payment_ids,
         })

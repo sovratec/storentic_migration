@@ -64,7 +64,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ── SQL (same table as migrate_customers.py) ───────────────────────────────────
 
 _INSERT_COLS = [
-    "external_id", "external_source",
+    "external_id", "external_source", "external_employee_id", "external_system",
     "first_name", "last_name", "company_name",
     "address1", "address2", "city", "state", "zip", "country", "phone",
     "alternate_first_name", "alternate_last_name",
@@ -81,7 +81,7 @@ _INSERT_COLS = [
 
 _INSERT_SQL = """
     INSERT INTO storentic.customer (
-        external_id, external_source,
+        external_id, external_source, external_employee_id, external_system,
         first_name, last_name, company_name,
         address1, address2, city, state, zip, country, phone,
         alternate_first_name, alternate_last_name,
@@ -183,6 +183,8 @@ def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int, ext
     return {
         "external_id":                  _extract_tenant_id(row),
         "external_source":              external_source,
+        "external_employee_id":         T.clean_str(row.get("EMPLOYEEID")),
+        "external_system":              "sitelink",
         "first_name":                   T.derive_full_name(row.get("FIRSTNAME"), row.get("MI")),
         "last_name":                    T.clean_str(row.get("LASTNAME")),
         "company_name":                 T.clean_str(row.get("COMPANY")),

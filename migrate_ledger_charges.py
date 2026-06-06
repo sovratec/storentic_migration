@@ -91,7 +91,7 @@ _INSERT_SQL = """
         memo, internal_note, status, invoice_id,
         source_screen, reversed_by_id, reversed_at,
         reversal_reason, created_by, created_at, updated_at,
-        external_charge_id
+        external_charge_id, external_employee_id, external_system
     ) VALUES %s
     ON CONFLICT (external_charge_id) WHERE external_charge_id IS NOT NULL DO NOTHING
 """
@@ -103,7 +103,7 @@ _INSERT_COLS = [
     "memo", "internal_note", "status", "invoice_id",
     "source_screen", "reversed_by_id", "reversed_at",
     "reversal_reason", "created_by", "created_at", "updated_at",
-    "external_charge_id",
+    "external_charge_id", "external_employee_id", "external_system",
 ]
 
 EXCEL_OUTPUT_COLUMNS = [
@@ -326,6 +326,9 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
     memo = str(raw_memo).strip() if pd.notna(raw_memo) and str(raw_memo).strip() not in ("", "nan") else None
 
     # Deleted charges are filtered out before transform — all rows here are POSTED
+    emp_raw = row.get("EMPLOYEEID")
+    emp_id  = str(emp_raw).strip() if pd.notna(emp_raw) and str(emp_raw).strip() not in ("", "nan") else None
+
     return {
         "external_charge_id": charge_id,
         "customer_id":        customer_id,
@@ -346,6 +349,8 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
         "created_by":         created_by,
         "created_at":         d_created or now,
         "updated_at":         d_updated or now,
+        "external_employee_id": emp_id,
+        "external_system":      "sitelink",
     }
 
 

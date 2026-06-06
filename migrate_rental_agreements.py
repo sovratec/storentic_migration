@@ -79,10 +79,19 @@ COL_LEASE      = "DLEASE"
 COL_PAID_THRU  = "DPAIDTHRU"
 COL_MOVED_OUT  = "DMOVEDOUT"
 COL_SCHED_OUT  = "DSCHEDOUT"
-COL_RENT       = "DCRENT"
-COL_SCHED_RENT = "DCSCHEDRENT"
-COL_SEC_DEP    = "DCSECDEPPAID"
-COL_INSUR_PREM = "DCINSURPREMIUM"
+COL_RENT        = "DCRENT"
+COL_SCHED_RENT  = "DCSCHEDRENT"
+COL_SEC_DEP     = "DCSECDEPPAID"
+COL_INSUR_PREM  = "DCINSURPREMIUM"
+COL_EMPLOYEE_ID = "EMPLOYEEID"
+
+
+def _clean_str(value) -> str | None:
+    """Strip and return None for blank/nan values."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return None if s.lower() in ("nan", "none", "") else s
 
 
 # ── Lookup caches ──────────────────────────────────────────────────────────────
@@ -240,6 +249,9 @@ def transform_row(
         "promo_discount_in_cents":      0,
         # Metadata
         "notes":                        None,
+        # External system
+        "external_employee_id":         _clean_str(row.get(COL_EMPLOYEE_ID)),
+        "external_system":              "sitelink",
         # Audit
         "created_by":                   created_by,
         "updated_by":                   created_by,
@@ -286,6 +298,8 @@ _INSERT_SQL = """
         promo_code,
         promo_discount_in_cents,
         notes,
+        external_employee_id,
+        external_system,
         created_by,
         updated_by,
         created_datetime,
@@ -301,7 +315,8 @@ _INSERT_COLS = [
     "rental_rate_in_cents", "schedule_rate_in_cents", "rate_variance_in_cents",
     "security_deposit_in_cents", "insurance_option", "insurance_rate_in_cents",
     "charge_day", "status", "promo_code", "promo_discount_in_cents",
-    "notes", "created_by", "updated_by", "created_datetime", "updated_datetime", "version",
+    "notes", "external_employee_id", "external_system",
+    "created_by", "updated_by", "created_datetime", "updated_datetime", "version",
 ]
 
 _UPDATE_SQL = """

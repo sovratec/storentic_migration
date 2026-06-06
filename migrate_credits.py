@@ -77,6 +77,14 @@ _SMEMO_TO_CHARGE_TYPE: dict[str, int] = {
     "reservation fee":            10002,
 }
 
+def _clean_str(value) -> str | None:
+    """Strip and return None for blank/nan values."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return None if s.lower() in ("nan", "none", "") else s
+
+
 # ── SQL ────────────────────────────────────────────────────────────────────────
 _INSERT_SQL = """
     INSERT INTO storentic.ledger_charges (
@@ -85,7 +93,7 @@ _INSERT_SQL = """
         memo, internal_note, status, invoice_id,
         source_screen, reversed_by_id, reversed_at,
         reversal_reason, created_by, created_at, updated_at,
-        external_charge_id
+        external_charge_id, external_employee_id, external_system
     ) VALUES %s
     ON CONFLICT (external_charge_id) WHERE external_charge_id IS NOT NULL DO NOTHING
 """
@@ -96,7 +104,7 @@ _INSERT_COLS = [
     "memo", "internal_note", "status", "invoice_id",
     "source_screen", "reversed_by_id", "reversed_at",
     "reversal_reason", "created_by", "created_at", "updated_at",
-    "external_charge_id",
+    "external_charge_id", "external_employee_id", "external_system",
 ]
 
 EXCEL_OUTPUT_COLUMNS = [
@@ -406,6 +414,7 @@ def process_credits(
                 rd["unit_id"] if pd.notna(rd.get("unit_id")) else None,
                 rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
                 effective_date, created_dt, loc_id, org_id, created_by,
+                employee_id=_clean_str(rd.get("EMPLOYEEID")),
             )
             excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
             stats["inserted"] += 1
@@ -467,6 +476,7 @@ def process_credits(
                 credit_id, rd["customer_id"], unit_id,
                 rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
                 effective_date, created_dt, loc_id, org_id, created_by,
+                employee_id=_clean_str(rd.get("EMPLOYEEID")),
             )
             batch_tuples.append(tuple(record[col] for col in _INSERT_COLS))
             batch_ids.append(credit_id)
@@ -496,6 +506,7 @@ def _build_record(
     charge_type_id: int, smemo: str, dc_credit_amt,
     effective_date: datetime, created_dt: datetime,
     loc_id: int, org_id: int, created_by: int,
+    employee_id: str | None = None,
 ) -> dict:
     """Assemble the ledger_charges insert dict for one credit row."""
     return {
@@ -518,6 +529,8 @@ def _build_record(
         "created_by":         created_by,
         "created_at":         created_dt,
         "updated_at":         created_dt,
+        "external_employee_id": employee_id,
+        "external_system":      "sitelink",
     }
 
 

@@ -78,21 +78,25 @@ _SUPPORTED_FREQS = {'MONTHLY', 'QUARTERLY', 'ANNUAL'}
 # ── SQL ────────────────────────────────────────────────────────────────────────
 _INSERT_SQL = """
     INSERT INTO storentic.billing_schedules (
-        customer_unit_id, customer_id, unit_id,
+        customer_id, unit_id,
         location_id, organization_id,
         billing_frequency, charge_day,
         start_date, next_billing_date,
-        is_active, created_by, created_at, updated_at
+        is_active, created_by, created_at, updated_at,
+        rental_agreement_id,
+        external_employee_id, external_system
     ) VALUES %s
     ON CONFLICT DO NOTHING
 """
 
 _INSERT_COLS = [
-    "customer_unit_id", "customer_id", "unit_id",
+    "customer_id", "unit_id",
     "location_id", "organization_id",
     "billing_frequency", "charge_day",
     "start_date", "next_billing_date",
     "is_active", "created_by", "created_at", "updated_at",
+    "rental_agreement_id",
+    "external_employee_id", "external_system",
 ]
 
 
@@ -200,16 +204,16 @@ def load_unit_map(engine, loc_id: int) -> dict:
     return mapping
 
 
-def load_active_customer_units(engine) -> dict:
-    """Return {(customer_id, unit_id): customer_unit_id} for active rentals."""
-    logger.info("Loading active customer_units from DB...")
+def load_rental_agreement_map(engine) -> dict:
+    """Return {(customer_id, unit_id): rental_agreement_id} for active rentals (no move_out_date)."""
+    logger.info("Loading rental_agreements from DB...")
     with engine.connect() as conn:
         rows = conn.execute(sa_text(
-            "SELECT id, customer_id, unit_id FROM storentic.customer_unit "
+            "SELECT id, customer_id, unit_id FROM storentic.rental_agreements "
             "WHERE move_out_date IS NULL"
         )).fetchall()
     mapping = {(r.customer_id, r.unit_id): r.id for r in rows}
-    logger.info(f"    Active customer_units loaded: {len(mapping):,}")
+    logger.info(f"    Active rental_agreements loaded: {len(mapping):,}")
     return mapping
 
 
@@ -243,9 +247,9 @@ def run(args):
     )
     engine = create_engine(db_url)
 
-    customer_map  = load_customer_map(engine, org_id)
-    unit_map      = load_unit_map(engine, loc_id)
-    active_cu_map = load_active_customer_units(engine)
+    customer_map = load_customer_map(engine, org_id)
+    unit_map     = load_unit_map(engine, loc_id)
+    ra_map       = load_rental_agreement_map(engine)
 
     # ── Build insert tuples ───────────────────────────────────────────────────
     stats  = {"total": 0, "inserted": 0, "skipped": 0}
@@ -283,11 +287,11 @@ def run(args):
             stats["skipped"] += 1
             continue
 
-        # ── customer_unit_id ──────────────────────────────────────────────────
-        cu_id = active_cu_map.get((customer_id, unit_id))
-        if not cu_id:
-            log_skipped(0, unit_name, "customer_unit",
-                        f"No active customer_unit for customer={customer_id} unit={unit_id}", unit_name)
+        # ── rental_agreement_id ───────────────────────────────────────────────
+        ra_id = ra_map.get((customer_id, unit_id))
+        if not ra_id:
+            log_skipped(0, unit_name, "rental_agreement",
+                        f"No active rental_agreement for customer={customer_id} unit={unit_id}", unit_name)
             stats["skipped"] += 1
             continue
 
@@ -314,12 +318,19 @@ def run(args):
 
         nbd = calc_next_billing_date(charge_day)
 
+        emp_id_raw = row.get("EMPLOYEEID", "") or ""
+        emp_id = str(emp_id_raw).strip() or None
+        if emp_id and emp_id.lower() in ("nan", "none"):
+            emp_id = None
+
         tuples.append((
-            cu_id, customer_id, unit_id,
+            customer_id, unit_id,
             loc_id, org_id,
             freq, charge_day,
             start_date, nbd,
             True, created_by, now, now,
+            ra_id,
+            emp_id, "sitelink",
         ))
 
     logger.info(f"    Rows to insert : {len(tuples):,}")
