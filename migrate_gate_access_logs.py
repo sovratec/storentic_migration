@@ -238,7 +238,10 @@ def main(args=None):
 
     # ── Load source file ──────────────────────────────────────────────────────
     logger.info(f"📂  Loading source file: {args.file}")
-    df = pd.read_excel(args.file, dtype=str)
+    if args.file.lower().endswith(".csv"):
+        df = pd.read_csv(args.file, dtype=str, encoding="utf-8")
+    else:
+        df = pd.read_excel(args.file, dtype=str)
     df.columns = df.columns.str.strip().str.upper()
     df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
 
