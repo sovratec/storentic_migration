@@ -11,6 +11,7 @@ import hashlib
 from datetime import datetime
 
 from scripts.customer_transformer import clean_str, derive_full_name
+from scripts import to_bigint
 
 
 def make_external_id(lastname: str, firstname: str, phone: str, mobile: str, email: str) -> str:
@@ -105,7 +106,7 @@ def transform_row(
 
     return {
         "external_id":                  external_id,
-        "external_employee_id":         clean_str(g("EMPLOYEEID")),
+        "external_employee_id":         to_bigint(g("EMPLOYEEID")),
         "external_system":              "sitelink",
         "first_name":                   first_name,
         "last_name":                    last_name,

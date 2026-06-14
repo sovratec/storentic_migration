@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_ledger_charges.py — ETL script: SiteLink Select Charges → storentic.ledger_charges
 
 Usage :
@@ -76,6 +76,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -130,7 +131,7 @@ def load_charge_type_map(charge_types_file: str) -> dict:
     Rows with no id or no ChargeDescID are ignored (summary/total rows).
     """
     logger.info(f"📂  Loading charge type mapping: {charge_types_file}")
-    df = pd.read_csv(charge_types_file, dtype=str, encoding='utf-8')
+    df = pd.read_csv(charge_types_file, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
 
@@ -157,7 +158,7 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
         ledger_to_unitname : {LedgerID (int): sUnitName (str)}
     """
     logger.info(f"📂  Loading tenants file: {tenants_file}")
-    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = pd.read_csv(tenants_file, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
 
@@ -326,8 +327,7 @@ def transform_row(row: pd.Series, customer_id: int, unit_id, charge_type_id: int
     memo = str(raw_memo).strip() if pd.notna(raw_memo) and str(raw_memo).strip() not in ("", "nan") else None
 
     # Deleted charges are filtered out before transform — all rows here are POSTED
-    emp_raw = row.get("EMPLOYEEID")
-    emp_id  = str(emp_raw).strip() if pd.notna(emp_raw) and str(emp_raw).strip() not in ("", "nan") else None
+    emp_id = to_bigint(row.get("EMPLOYEEID"))
 
     return {
         "external_charge_id": charge_id,
@@ -383,7 +383,7 @@ def process_charges(
 
     # ── Read source CSV ────────────────────────────────────────────────────────
     logger.info(f"📂  Loading charges file: {charges_file}")
-    df = pd.read_csv(charges_file, dtype=str, encoding='utf-8')
+    df = pd.read_csv(charges_file, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
     df = df[df["CHARGEID"].notna() & (df["CHARGEID"].str.strip() != "")].copy()

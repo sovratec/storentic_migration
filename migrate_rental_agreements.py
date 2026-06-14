@@ -64,6 +64,7 @@ load_dotenv()
 from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts.validator import validate
 from scripts import rental_agreement_transformer as T
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -250,7 +251,7 @@ def transform_row(
         # Metadata
         "notes":                        None,
         # External system
-        "external_employee_id":         _clean_str(row.get(COL_EMPLOYEE_ID)),
+        "external_employee_id":         to_bigint(row.get(COL_EMPLOYEE_ID)),
         "external_system":              "sitelink",
         # Audit
         "created_by":                   created_by,

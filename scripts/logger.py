@@ -33,11 +33,10 @@ _file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
 _file_handler.setLevel(logging.INFO)
 _file_handler.setFormatter(_fmt)
 
-# Console handler — CRITICAL only (silent in normal runs).
-# All warnings, errors, and info go to the log file.
-# Use print() directly for user-facing progress/summary output.
+# Console handler — INFO+ so all progress lines stream to the SSE terminal
+# (stderr is merged into stdout by Popen stderr=subprocess.STDOUT).
 _console_handler = logging.StreamHandler()
-_console_handler.setLevel(logging.CRITICAL)
+_console_handler.setLevel(logging.INFO)
 _console_handler.setFormatter(_fmt)
 
 logger = logging.getLogger("storentic_migration")

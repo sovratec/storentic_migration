@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_invoices.py
 ===================
 ETL script: SiteLink Invoices export + Payments CSV → storentic.invoices
@@ -81,6 +81,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -201,7 +202,7 @@ def load_invoices_file(filepath: str) -> pd.DataFrame:
     An invoice may have multiple detail rows; we group them later by InvoiceID.
     """
     logger.info(f"Loading invoices file: {filepath}")
-    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = pd.read_csv(filepath, dtype=str, encoding='latin-1')
     df.columns = df.columns.str.strip().str.upper()
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
 
@@ -449,8 +450,7 @@ def build_invoice_records(
                 ) if pid
             })
 
-        emp_raw = first.get("EMPLOYEEID")
-        emp_id  = str(emp_raw).strip() if emp_raw is not None and str(emp_raw).strip() not in ("", "nan") else None
+        emp_id = to_bigint(first.get("EMPLOYEEID"))
 
         inv_type_id = _invoice_type_id(charge_type_id)
         inv_type    = _INVOICE_TYPE_NAMES.get(inv_type_id, "MISC")
@@ -654,6 +654,7 @@ def parse_args(args=None):
     )
     p.add_argument("--file-invoices", required=True, help="Path to Invoices.csv")
     p.add_argument("--file-payments", required=True, help="Path to Payments.csv")
+    p.add_argument("--output", default="db", choices=["db"], help="Output destination (currently only 'db')")
     p.add_argument("--dry-run", action="store_true", help="Preview without writing to DB")
     return p.parse_args(args)
 

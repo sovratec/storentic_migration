@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_billing_schedules.py — ETL: SiteLink Tenants → storentic.billing_schedules
 
 Source
@@ -59,6 +59,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_skipped, close as close_logger
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -136,7 +137,7 @@ def parse_date(val) -> date | None:
 def load_tenants(filepath: str) -> pd.DataFrame:
     """Load active tenant rows from the combined Tenants+Units+Ledgers file."""
     logger.info(f"Loading tenants file: {filepath}")
-    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = pd.read_csv(filepath, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
 
@@ -160,7 +161,7 @@ def load_tenants(filepath: str) -> pd.DataFrame:
 def load_rentroll_charge_days(filepath: str) -> dict:
     """Load RentRoll CSV → {unit_number (str): charge_day (int)}."""
     logger.info(f"Loading RentRoll file: {filepath}")
-    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = pd.read_csv(filepath, dtype=str, encoding='latin-1')
     df.columns = df.columns.str.strip().str.upper()
     mapping = {}
     for _, row in df.iterrows():
@@ -318,10 +319,7 @@ def run(args):
 
         nbd = calc_next_billing_date(charge_day)
 
-        emp_id_raw = row.get("EMPLOYEEID", "") or ""
-        emp_id = str(emp_id_raw).strip() or None
-        if emp_id and emp_id.lower() in ("nan", "none"):
-            emp_id = None
+        emp_id = to_bigint(row.get("EMPLOYEEID"))
 
         tuples.append((
             customer_id, unit_id,

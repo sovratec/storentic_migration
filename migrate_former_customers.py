@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_former_customers.py
 ===========================
 ETL script: SiteLink "All Former Tenants" Excel export -> storentic.customer
@@ -57,6 +57,7 @@ load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts import customer_transformer as T
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -142,7 +143,7 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     the customer table, not here.
     """
     logger.info(f"Loading file: {filepath}")
-    df = pd.read_csv(filepath, dtype=str, encoding='utf-8')
+    df = pd.read_csv(filepath, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
     df = df.fillna("").apply(lambda c: c.str.strip() if c.dtype == "object" else c)
@@ -183,7 +184,7 @@ def transform_row(row: pd.Series, org_id: int, loc_id: int, created_by: int, ext
     return {
         "external_id":                  _extract_tenant_id(row),
         "external_source":              external_source,
-        "external_employee_id":         T.clean_str(row.get("EMPLOYEEID")),
+        "external_employee_id":         to_bigint(row.get("EMPLOYEEID")),
         "external_system":              "sitelink",
         "first_name":                   T.derive_full_name(row.get("FIRSTNAME"), row.get("MI")),
         "last_name":                    T.clean_str(row.get("LASTNAME")),

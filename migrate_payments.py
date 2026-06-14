@@ -141,7 +141,7 @@ def build_ledger_to_tenant_map(tenants_file: str) -> dict[int, int]:
     for every LedgerID we know which TenantID it belongs to.
     """
     logger.info(f"📂  Loading tenants file: {tenants_file}")
-    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = pd.read_csv(tenants_file, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
 

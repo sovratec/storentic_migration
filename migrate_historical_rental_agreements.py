@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_historical_rental_agreements.py — ETL: historical rental_agreements from SiteLink.
 
 Source : Tenants+Units+Ledgers+Access CSV file (SiteLink export)
@@ -64,6 +64,7 @@ load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
 from scripts import rental_agreement_transformer as T
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -282,7 +283,7 @@ def transform_row(excel_row: int, row: pd.Series,
         "promo_code":                 None,
         "promo_discount_in_cents":    0,
         "notes":                      None,
-        "external_employee_id":       _clean_str(row.get("EMPLOYEEID")),
+        "external_employee_id":       to_bigint(row.get("EMPLOYEEID")),
         "external_system":            "sitelink",
         "created_by":                 created_by,
         "updated_by":                 created_by,
@@ -376,7 +377,7 @@ def main(args=None):
 
     # ── Load and filter source file ───────────────────────────────────────────
     logger.info(f"📂  Loading source file: {args.file}")
-    df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
+    df_raw = pd.read_csv(args.file, dtype=str, encoding='latin-1')
     df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
     df_raw.columns = df_raw.columns.str.strip().str.upper()
 

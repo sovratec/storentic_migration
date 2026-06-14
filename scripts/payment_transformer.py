@@ -11,6 +11,7 @@ Target:  storentic.payments
 
 from datetime import datetime
 from typing import Optional
+from scripts import to_bigint
 
 
 # ── String helper ──────────────────────────────────────────────────────────────
@@ -256,7 +257,7 @@ def transform_row(
         "created_at"             : created_at,
         "updated_at"             : created_at,
         # External system fields
-        "external_employee_id"      : _clean_str(row.get("EMPLOYEEID")),
+        "external_employee_id"      : to_bigint(row.get("EMPLOYEEID")),
         "external_system"           : "sitelink",
         # Fields not applicable to legacy imports — explicitly set to safe defaults
         "payment_profile_id"        : None,

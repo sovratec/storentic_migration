@@ -45,6 +45,7 @@ load_dotenv()
 from scripts.logger import logger, log_error, log_skipped, write_summary, close as close_logger
 from scripts.validator import validate
 from scripts import customer_transformer as T
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -108,7 +109,7 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
     record = {
         "external_id":                  external_id,
         "external_source":              external_source,
-        "external_employee_id":         T.clean_str(row.get(COL_EMPLOYEE_ID)),
+        "external_employee_id":         to_bigint(row.get(COL_EMPLOYEE_ID)),
         "external_system":              "sitelink",
         "first_name":                   T.derive_full_name(get(COL_FNAME), get(COL_MI)),
         "last_name":                    last_name,

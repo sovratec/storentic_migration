@@ -65,6 +65,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -428,8 +429,7 @@ def _build_record(rd: dict) -> dict:
     now          = datetime.utcnow()
     created_at   = receipt_date or now
 
-    emp_raw = rd.get("EMPLOYEEID")
-    emp_id  = str(emp_raw).strip() if emp_raw is not None and str(emp_raw).strip() not in ("", "nan") else None
+    emp_id = to_bigint(rd.get("EMPLOYEEID"))
 
     return {
         "receipt_number":           rd["receipt_number"],

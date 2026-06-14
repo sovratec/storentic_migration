@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_credits.py — ETL script: SiteLink Credits CSV → storentic.ledger_charges
 
 Credits are stored as negative-amount ledger charges with a Waived Off charge type.
@@ -66,6 +66,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 from scripts.logger import logger, log_error, log_skipped, close as close_logger
+from scripts import to_bigint
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -180,7 +181,7 @@ def load_tenants_maps(tenants_file: str) -> tuple[dict, dict]:
     Read Tenants CSV → {LedgerID: TenantID}, {LedgerID: sUnitName}
     """
     logger.info(f"Loading tenants file: {tenants_file}")
-    df = pd.read_csv(tenants_file, dtype=str, encoding='utf-8')
+    df = pd.read_csv(tenants_file, dtype=str, encoding='latin-1')
     df = df.drop(columns=["Totals & Averages"], errors="ignore")
     df.columns = df.columns.str.strip().str.upper()
 
@@ -414,7 +415,7 @@ def process_credits(
                 rd["unit_id"] if pd.notna(rd.get("unit_id")) else None,
                 rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
                 effective_date, created_dt, loc_id, org_id, created_by,
-                employee_id=_clean_str(rd.get("EMPLOYEEID")),
+                employee_id=to_bigint(rd.get("EMPLOYEEID")),
             )
             excel_records.append({k: record[k] for k in EXCEL_OUTPUT_COLUMNS if k in record})
             stats["inserted"] += 1
@@ -476,7 +477,7 @@ def process_credits(
                 credit_id, rd["customer_id"], unit_id,
                 rd["charge_type_id"], smemo, rd.get("DCCREDITAMT"),
                 effective_date, created_dt, loc_id, org_id, created_by,
-                employee_id=_clean_str(rd.get("EMPLOYEEID")),
+                employee_id=to_bigint(rd.get("EMPLOYEEID")),
             )
             batch_tuples.append(tuple(record[col] for col in _INSERT_COLS))
             batch_ids.append(credit_id)
@@ -506,7 +507,7 @@ def _build_record(
     charge_type_id: int, smemo: str, dc_credit_amt,
     effective_date: datetime, created_dt: datetime,
     loc_id: int, org_id: int, created_by: int,
-    employee_id: str | None = None,
+    employee_id: int | None = None,
 ) -> dict:
     """Assemble the ledger_charges insert dict for one credit row."""
     return {

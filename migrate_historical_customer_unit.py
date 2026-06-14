@@ -1,4 +1,4 @@
-"""
+﻿"""
 migrate_historical_customer_unit.py — ETL script for loading historical customer_unit records.
 
 Source : Tenants+Units+Ledgers+Access CSV file (SiteLink export)
@@ -343,7 +343,7 @@ def main(args=None):
 
     # ── Load and filter source file ───────────────────────────────────────────
     logger.info(f"📂  Loading source file: {args.file}")
-    df_raw = pd.read_csv(args.file, dtype=str, encoding='utf-8')
+    df_raw = pd.read_csv(args.file, dtype=str, encoding='latin-1')
     df_raw = df_raw.drop(columns=["Totals & Averages"], errors="ignore")
     df_raw.columns = df_raw.columns.str.strip().str.upper()
 
