@@ -26,6 +26,8 @@ import os
 import sys
 from datetime import datetime
 
+sys.stdout.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv
 from sqlalchemy import text as sa_text
 

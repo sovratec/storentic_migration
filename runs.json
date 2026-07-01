@@ -1,0 +1,1172 @@
+{
+  "runs": [
+    {
+      "run_id": "9ed7eb53",
+      "migration_type": "recalculate_invoice_status",
+      "label": "Recalculate Invoice Status",
+      "files": [],
+      "dry_run": false,
+      "started_at": "2026-06-23T15:08:24.769658",
+      "finished_at": "2026-06-23T15:08:35.367913",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "1e4ecc95",
+      "migration_type": "recalculate_invoice_status",
+      "label": "Recalculate Invoice Status",
+      "files": [],
+      "dry_run": false,
+      "started_at": "2026-06-23T09:50:45.892826",
+      "finished_at": "2026-06-23T09:50:46.376241",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "0s",
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "393c738a",
+      "migration_type": "gate_access_logs",
+      "label": "Gate Access Logs",
+      "files": [
+        "Activities.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-23T09:44:29.513573",
+      "finished_at": "2026-06-23T09:44:46.692140",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "17s",
+      "log_file": "migration_migrate_gate_access_logs_20260623_094430.log",
+      "skipped_file": "skipped_migrate_gate_access_logs_20260623_094430.csv",
+      "error_file": "errors_migrate_gate_access_logs_20260623_094430.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "c12f3b31",
+      "migration_type": "receipts",
+      "label": "Receipts",
+      "files": [
+        "Receipts.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T23:55:50.892628",
+      "finished_at": "2026-06-22T23:57:05.640333",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "1m 14s",
+      "log_file": "migration_migrate_receipts_20260622_235552.log",
+      "skipped_file": "skipped_migrate_receipts_20260622_235552.csv",
+      "error_file": "errors_migrate_receipts_20260622_235552.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "cada965a",
+      "migration_type": "receipts",
+      "label": "Receipts",
+      "files": [
+        "Receipts.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T23:19:07.227995",
+      "finished_at": "2026-06-22T23:21:56.619268",
+      "status": "error",
+      "exit_code": 3221225786,
+      "duration": "2m 49s",
+      "log_file": "migration_migrate_receipts_20260622_231907.log",
+      "skipped_file": "skipped_migrate_receipts_20260622_231907.csv",
+      "error_file": "errors_migrate_receipts_20260622_231907.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "1424bca2",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T23:14:58.904945",
+      "finished_at": "2026-06-22T23:18:17.426343",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "3m 18s",
+      "log_file": "migration_migrate_invoices_20260622_231459.log",
+      "skipped_file": "skipped_migrate_invoices_20260622_231459.csv",
+      "error_file": "errors_migrate_invoices_20260622_231459.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "9c220569",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T23:02:23.555271",
+      "finished_at": "2026-06-22T23:04:46.241050",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "2m 22s",
+      "log_file": "migration_migrate_invoices_20260622_230224.log",
+      "skipped_file": "skipped_migrate_invoices_20260622_230224.csv",
+      "error_file": "errors_migrate_invoices_20260622_230224.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "ca5c81a4",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T22:53:13.238791",
+      "finished_at": "2026-06-22T22:55:54.527892",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "2m 41s",
+      "log_file": "migration_migrate_invoices_20260622_225313.log",
+      "skipped_file": "skipped_migrate_invoices_20260622_225313.csv",
+      "error_file": "errors_migrate_invoices_20260622_225313.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "3491138f",
+      "migration_type": "ledger_charges",
+      "label": "Ledger Charges",
+      "files": [
+        "Charges.csv",
+        "Tenants_Units_Ledgers_Access.csv",
+        "ChargeType.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T22:48:44.799497",
+      "finished_at": "2026-06-22T22:52:28.265444",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "3m 43s",
+      "log_file": "migration_migrate_ledger_charges_20260622_224845.log",
+      "skipped_file": "skipped_migrate_ledger_charges_20260622_224845.csv",
+      "error_file": "errors_migrate_ledger_charges_20260622_224845.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "5eeb214c",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T22:46:33.739537",
+      "finished_at": "2026-06-22T22:46:57.942761",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "24s",
+      "log_file": "migration_migrate_credits_20260622_224635.log",
+      "skipped_file": "skipped_migrate_credits_20260622_224635.csv",
+      "error_file": "errors_migrate_credits_20260622_224635.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "ffc3fa73",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T21:33:14.394360",
+      "finished_at": "2026-06-22T21:55:29.475346",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "22m 15s",
+      "log_file": "migration_migrate_credits_20260622_213315.log",
+      "skipped_file": "skipped_migrate_credits_20260622_213315.csv",
+      "error_file": "errors_migrate_credits_20260622_213315.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "7476e4af",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T21:26:31.921057",
+      "finished_at": "2026-06-22T21:27:02.364445",
+      "status": "error",
+      "exit_code": 3221225786,
+      "duration": "30s",
+      "log_file": "migration_migrate_credits_20260622_212632.log",
+      "skipped_file": "skipped_migrate_credits_20260622_212632.csv",
+      "error_file": "errors_migrate_credits_20260622_212632.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "8514a725",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T21:20:11.409679",
+      "finished_at": null,
+      "status": "running",
+      "exit_code": null,
+      "duration": null,
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "55b00644",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T21:02:20.716169",
+      "finished_at": "2026-06-22T21:02:21.617873",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "0s",
+      "log_file": "migration_migrate_credits_20260622_210221.log",
+      "skipped_file": "skipped_migrate_credits_20260622_210221.csv",
+      "error_file": "errors_migrate_credits_20260622_210221.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "3eacc15b",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv",
+        "Credits.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T20:49:14.407553",
+      "finished_at": "2026-06-22T20:53:03.966604",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "3m 49s",
+      "log_file": "migration_migrate_payments_20260622_204915.log",
+      "skipped_file": "skipped_migrate_payments_20260622_204915.csv",
+      "error_file": "errors_migrate_payments_20260622_204915.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "9c7df821",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv",
+        "Credits.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T20:42:00.554896",
+      "finished_at": "2026-06-22T20:42:55.415601",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "54s",
+      "log_file": "migration_migrate_payments_20260622_204201.log",
+      "skipped_file": "skipped_migrate_payments_20260622_204201.csv",
+      "error_file": "errors_migrate_payments_20260622_204201.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "308fc6d2",
+      "migration_type": "billing_schedules",
+      "label": "Billing Schedules",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv",
+        "Rent_Roll_Sheet1.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T20:39:42.943832",
+      "finished_at": "2026-06-22T20:40:01.168020",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "18s",
+      "log_file": "migration_migrate_billing_schedules_20260622_203943.log",
+      "skipped_file": "skipped_migrate_billing_schedules_20260622_203943.csv",
+      "error_file": "errors_migrate_billing_schedules_20260622_203943.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "96dfd6c3",
+      "migration_type": "billing_schedules",
+      "label": "Billing Schedules",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv",
+        "Rent_Roll_Sheet1.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T20:38:14.742834",
+      "finished_at": "2026-06-22T20:38:31.686929",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "16s",
+      "log_file": "migration_migrate_billing_schedules_20260622_203815.log",
+      "skipped_file": "skipped_migrate_billing_schedules_20260622_203815.csv",
+      "error_file": "errors_migrate_billing_schedules_20260622_203815.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "89f9ba78",
+      "migration_type": "billing_schedules",
+      "label": "Billing Schedules",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv",
+        "Rent_Roll_Sheet1.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:50:33.583334",
+      "finished_at": "2026-06-22T17:50:50.181501",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "16s",
+      "log_file": "migration_migrate_billing_schedules_20260622_175034.log",
+      "skipped_file": "skipped_migrate_billing_schedules_20260622_175034.csv",
+      "error_file": "errors_migrate_billing_schedules_20260622_175034.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "420f3226",
+      "migration_type": "historical_rental_agreements",
+      "label": "Historical Leases",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:49:00.198589",
+      "finished_at": "2026-06-22T17:49:30.274179",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "30s",
+      "log_file": "migration_migrate_historical_rental_agreements_20260622_174900.log",
+      "skipped_file": "skipped_migrate_historical_rental_agreements_20260622_174900.csv",
+      "error_file": "errors_migrate_historical_rental_agreements_20260622_174900.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "08f2a4e6",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:48:22.859829",
+      "finished_at": "2026-06-22T17:48:38.412840",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "15s",
+      "log_file": "migration_migrate_rental_agreements_20260622_174823.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_174823.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_174823.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260622_174823.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "357f4544",
+      "migration_type": "former_customers",
+      "label": "Former Customers",
+      "files": [
+        "Former_Tenants.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:47:16.825829",
+      "finished_at": "2026-06-22T17:47:33.705549",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "16s",
+      "log_file": "migration_migrate_former_customers_20260622_174717.log",
+      "skipped_file": "skipped_migrate_former_customers_20260622_174717.csv",
+      "error_file": "errors_migrate_former_customers_20260622_174717.csv",
+      "summary_file": null,
+      "output_file": "active_ledgers_review.xlsx"
+    },
+    {
+      "run_id": "78b497af",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:46:49.858737",
+      "finished_at": "2026-06-22T17:47:00.638544",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": "migration_migrate_customers_20260622_174650.log",
+      "skipped_file": "skipped_migrate_customers_20260622_174650.csv",
+      "error_file": "errors_migrate_customers_20260622_174650.csv",
+      "summary_file": "summary_migrate_customers_20260622_174650.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "16c2eea6",
+      "migration_type": "historical_rental_agreements",
+      "label": "Historical Leases",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:40:49.991013",
+      "finished_at": "2026-06-22T17:41:06.260571",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "16s",
+      "log_file": "migration_migrate_historical_rental_agreements_20260622_174050.log",
+      "skipped_file": "skipped_migrate_historical_rental_agreements_20260622_174050.csv",
+      "error_file": "errors_migrate_historical_rental_agreements_20260622_174050.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "6628743b",
+      "migration_type": "former_customers",
+      "label": "Former Customers",
+      "files": [
+        "Former_Tenants.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:39:00.711466",
+      "finished_at": "2026-06-22T17:39:09.722656",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "9s",
+      "log_file": "migration_migrate_former_customers_20260622_173901.log",
+      "skipped_file": "skipped_migrate_former_customers_20260622_173901.csv",
+      "error_file": "errors_migrate_former_customers_20260622_173901.csv",
+      "summary_file": null,
+      "output_file": "active_ledgers_review.xlsx"
+    },
+    {
+      "run_id": "9bdd4b01",
+      "migration_type": "historical_rental_agreements",
+      "label": "Historical Leases",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:29:28.005496",
+      "finished_at": "2026-06-22T17:29:44.657965",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "16s",
+      "log_file": "migration_migrate_historical_rental_agreements_20260622_172928.log",
+      "skipped_file": "skipped_migrate_historical_rental_agreements_20260622_172928.csv",
+      "error_file": "errors_migrate_historical_rental_agreements_20260622_172928.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "b886c6a3",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:27:52.218433",
+      "finished_at": "2026-06-22T17:28:08.198041",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "15s",
+      "log_file": "migration_migrate_rental_agreements_20260622_172752.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_172752.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_172752.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260622_172752.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "c2fff4b0",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:24:16.747264",
+      "finished_at": "2026-06-22T17:24:32.366457",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "15s",
+      "log_file": "migration_migrate_rental_agreements_20260622_172417.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_172417.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_172417.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "379bb70b",
+      "migration_type": "former_customers",
+      "label": "Former Customers",
+      "files": [
+        "Former_Tenants.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:15:16.341130",
+      "finished_at": "2026-06-22T17:15:31.196411",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "14s",
+      "log_file": "migration_migrate_former_customers_20260622_171516.log",
+      "skipped_file": "skipped_migrate_former_customers_20260622_171516.csv",
+      "error_file": "errors_migrate_former_customers_20260622_171516.csv",
+      "summary_file": null,
+      "output_file": "active_ledgers_review.xlsx"
+    },
+    {
+      "run_id": "124138cb",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:14:29.388593",
+      "finished_at": "2026-06-22T17:14:40.190630",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": "migration_migrate_customers_20260622_171429.log",
+      "skipped_file": "skipped_migrate_customers_20260622_171429.csv",
+      "error_file": "errors_migrate_customers_20260622_171429.csv",
+      "summary_file": "summary_migrate_customers_20260622_171429.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "d1e72d3f",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T17:09:37.134684",
+      "finished_at": "2026-06-22T17:09:49.726796",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "12s",
+      "log_file": "migration_migrate_customers_20260622_170937.log",
+      "skipped_file": "skipped_migrate_customers_20260622_170937.csv",
+      "error_file": "errors_migrate_customers_20260622_170937.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "adbaa302",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:50:16.490858",
+      "finished_at": "2026-06-22T15:50:26.841278",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "10s",
+      "log_file": "migration_migrate_customers_20260622_155017.log",
+      "skipped_file": "skipped_migrate_customers_20260622_155017.csv",
+      "error_file": "errors_migrate_customers_20260622_155017.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "9beb90d9",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:41:28.681817",
+      "finished_at": "2026-06-22T15:41:32.084363",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "3s",
+      "log_file": "migration_migrate_rental_agreements_20260622_154129.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_154129.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_154129.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "e2c39645",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:23:42.475175",
+      "finished_at": "2026-06-22T15:23:45.359915",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "2s",
+      "log_file": "migration_migrate_rental_agreements_20260622_152342.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_152342.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_152342.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "ae06bbf8",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:21:40.804937",
+      "finished_at": "2026-06-22T15:21:43.709931",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "2s",
+      "log_file": "migration_migrate_rental_agreements_20260622_152141.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260622_152141.csv",
+      "error_file": "errors_migrate_rental_agreements_20260622_152141.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "89135a62",
+      "migration_type": "former_customers",
+      "label": "Former Customers",
+      "files": [
+        "Former_Tenants.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:19:24.963469",
+      "finished_at": "2026-06-22T15:19:39.940640",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "14s",
+      "log_file": "migration_migrate_former_customers_20260622_151925.log",
+      "skipped_file": "skipped_migrate_former_customers_20260622_151925.csv",
+      "error_file": "errors_migrate_former_customers_20260622_151925.csv",
+      "summary_file": null,
+      "output_file": "active_ledgers_review.xlsx"
+    },
+    {
+      "run_id": "97652f13",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-22T15:18:19.859478",
+      "finished_at": "2026-06-22T15:18:30.262427",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": "migration_migrate_customers_20260622_151820.log",
+      "skipped_file": "skipped_migrate_customers_20260622_151820.csv",
+      "error_file": "errors_migrate_customers_20260622_151820.csv",
+      "summary_file": "summary_migrate_customers_20260622_151820.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "adebc470",
+      "migration_type": "gate_access_logs",
+      "label": "Gate Access Logs",
+      "files": [
+        "Activities.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:48:55.838588",
+      "finished_at": "2026-06-14T20:49:22.117881",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "26s",
+      "log_file": "migration_migrate_gate_access_logs_20260614_204856.log",
+      "skipped_file": "skipped_migrate_gate_access_logs_20260614_204856.csv",
+      "error_file": "errors_migrate_gate_access_logs_20260614_204856.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "4defa664",
+      "migration_type": "receipts",
+      "label": "Receipts",
+      "files": [
+        "Receipts.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:46:35.601981",
+      "finished_at": "2026-06-14T20:47:34.658380",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "59s",
+      "log_file": "migration_migrate_receipts_20260614_204636.log",
+      "skipped_file": "skipped_migrate_receipts_20260614_204636.csv",
+      "error_file": "errors_migrate_receipts_20260614_204636.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "0948b953",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:39:09.965499",
+      "finished_at": "2026-06-14T20:45:37.635753",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "6m 27s",
+      "log_file": "migration_migrate_invoices_20260614_203911.log",
+      "skipped_file": "skipped_migrate_invoices_20260614_203911.csv",
+      "error_file": "errors_migrate_invoices_20260614_203911.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "dfcbf461",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:34:31.172611",
+      "finished_at": "2026-06-14T20:34:32.415112",
+      "status": "error",
+      "exit_code": 2,
+      "duration": "1s",
+      "log_file": "migration_migrate_invoices_20260614_203432.log",
+      "skipped_file": "skipped_migrate_invoices_20260614_203432.csv",
+      "error_file": "errors_migrate_invoices_20260614_203432.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "da84bc04",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:33:40.913134",
+      "finished_at": "2026-06-14T20:33:42.074472",
+      "status": "error",
+      "exit_code": 2,
+      "duration": "1s",
+      "log_file": "migration_migrate_invoices_20260614_203341.log",
+      "skipped_file": "skipped_migrate_invoices_20260614_203341.csv",
+      "error_file": "errors_migrate_invoices_20260614_203341.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "db192ef8",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:32:52.773894",
+      "finished_at": "2026-06-14T20:32:54.042060",
+      "status": "error",
+      "exit_code": 2,
+      "duration": "1s",
+      "log_file": "migration_migrate_invoices_20260614_203253.log",
+      "skipped_file": "skipped_migrate_invoices_20260614_203253.csv",
+      "error_file": "errors_migrate_invoices_20260614_203253.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "1694683b",
+      "migration_type": "invoices",
+      "label": "Invoices",
+      "files": [
+        "Invoices.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:31:41.853008",
+      "finished_at": "2026-06-14T20:31:44.117077",
+      "status": "error",
+      "exit_code": 2,
+      "duration": "2s",
+      "log_file": "migration_migrate_invoices_20260614_203143.log",
+      "skipped_file": "skipped_migrate_invoices_20260614_203143.csv",
+      "error_file": "errors_migrate_invoices_20260614_203143.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "3b6cbd76",
+      "migration_type": "ledger_charges",
+      "label": "Ledger Charges",
+      "files": [
+        "Charges.csv",
+        "Tenants_Units_Ledgers_Access.csv",
+        "ChargeType.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:16:29.670148",
+      "finished_at": "2026-06-14T20:24:06.732660",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "7m 37s",
+      "log_file": "migration_migrate_ledger_charges_20260614_201630.log",
+      "skipped_file": "skipped_migrate_ledger_charges_20260614_201630.csv",
+      "error_file": "errors_migrate_ledger_charges_20260614_201630.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "3f9b0f7e",
+      "migration_type": "credits",
+      "label": "Credits",
+      "files": [
+        "Credits.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:02:10.499391",
+      "finished_at": "2026-06-14T20:02:11.961361",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "1s",
+      "log_file": "migration_migrate_credits_20260614_200211.log",
+      "skipped_file": "skipped_migrate_credits_20260614_200211.csv",
+      "error_file": "errors_migrate_credits_20260614_200211.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "34c89825",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv",
+        "Payments.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T20:00:19.871343",
+      "finished_at": "2026-06-14T20:00:44.487355",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "24s",
+      "log_file": "migration_migrate_payments_20260614_200021.log",
+      "skipped_file": "skipped_migrate_payments_20260614_200021.csv",
+      "error_file": "errors_migrate_payments_20260614_200021.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "a5955d53",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T19:38:30.737630",
+      "finished_at": "2026-06-14T19:39:16.237959",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "45s",
+      "log_file": "migration_migrate_payments_20260614_193832.log",
+      "skipped_file": "skipped_migrate_payments_20260614_193832.csv",
+      "error_file": "errors_migrate_payments_20260614_193832.csv",
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "5b1cfd9a",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:27:08.473217",
+      "finished_at": "2026-06-14T12:27:36.426773",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "27s",
+      "log_file": "migration_migrate_rental_agreements_20260614_120047.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260614_120047.csv",
+      "error_file": "errors_migrate_rental_agreements_20260614_120047.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260614_120047.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "4dcc99ea",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:18:59.531722",
+      "finished_at": "2026-06-14T12:19:07.702712",
+      "status": "error",
+      "exit_code": null,
+      "duration": null,
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "331b07bf",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:17:50.680914",
+      "finished_at": "2026-06-14T12:17:58.872450",
+      "status": "error",
+      "exit_code": null,
+      "duration": null,
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "eb4d96f0",
+      "migration_type": "payments",
+      "label": "Payments",
+      "files": [
+        "Payments.csv",
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:09:09.250680",
+      "finished_at": "2026-06-14T12:09:16.795320",
+      "status": "error",
+      "exit_code": null,
+      "duration": null,
+      "log_file": null,
+      "skipped_file": null,
+      "error_file": null,
+      "summary_file": null,
+      "output_file": null
+    },
+    {
+      "run_id": "88f7f606",
+      "migration_type": "billing_schedules",
+      "label": "Billing Schedules",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv",
+        "Rent_Roll_Sheet1.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:07:19.439205",
+      "finished_at": "2026-06-14T12:07:29.898897",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": "migration_migrate_rental_agreements_20260614_120047.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260614_120047.csv",
+      "error_file": "errors_migrate_rental_agreements_20260614_120047.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260614_120047.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "6b5d7ccb",
+      "migration_type": "historical_rental_agreements",
+      "label": "Historical Leases",
+      "files": [
+        "Tenants_Units_Ledgers_Access.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:01:56.781036",
+      "finished_at": "2026-06-14T12:02:28.737957",
+      "status": "error",
+      "exit_code": 1,
+      "duration": "31s",
+      "log_file": "migration_migrate_rental_agreements_20260614_120047.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260614_120047.csv",
+      "error_file": "errors_migrate_rental_agreements_20260614_120047.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260614_120047.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "b5c3771a",
+      "migration_type": "rental_agreements",
+      "label": "Rental Agreements",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T12:00:47.484907",
+      "finished_at": "2026-06-14T12:00:58.658380",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "11s",
+      "log_file": "migration_migrate_rental_agreements_20260614_120047.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260614_120047.csv",
+      "error_file": "errors_migrate_rental_agreements_20260614_120047.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260614_120047.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "d73db96c",
+      "migration_type": "former_customers",
+      "label": "Former Customers",
+      "files": [
+        "FormerTenants.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T11:59:08.571159",
+      "finished_at": "2026-06-14T11:59:18.597058",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "10s",
+      "log_file": "migration_migrate_rental_agreements_20260605_233349.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260605_233349.csv",
+      "error_file": "errors_migrate_rental_agreements_20260605_233349.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260605_233349.txt",
+      "output_file": "active_ledgers_review.xlsx"
+    },
+    {
+      "run_id": "cd83cf1e",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-14T11:58:14.527414",
+      "finished_at": "2026-06-14T11:58:23.199426",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "8s",
+      "log_file": "migration_migrate_rental_agreements_20260605_233349.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260605_233349.csv",
+      "error_file": "errors_migrate_rental_agreements_20260605_233349.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260605_233349.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "ce5ac5ca",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": false,
+      "started_at": "2026-06-12T23:13:32.479745",
+      "finished_at": "2026-06-12T23:13:44.132216",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "11s",
+      "log_file": "migration_migrate_rental_agreements_20260605_233349.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260605_233349.csv",
+      "error_file": "errors_migrate_rental_agreements_20260605_233349.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260605_233349.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "46b09577",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Directory.csv"
+      ],
+      "dry_run": true,
+      "started_at": "2026-06-12T23:12:26.886678",
+      "finished_at": "2026-06-12T23:12:28.643047",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "1s",
+      "log_file": "migration_migrate_rental_agreements_20260605_233349.log",
+      "skipped_file": "skipped_migrate_rental_agreements_20260605_233349.csv",
+      "error_file": "errors_migrate_rental_agreements_20260605_233349.csv",
+      "summary_file": "summary_migrate_rental_agreements_20260605_233349.txt",
+      "output_file": null
+    },
+    {
+      "run_id": "7feb2df1",
+      "migration_type": "customers",
+      "label": "Active Customers",
+      "files": [
+        "Customers.xlsx"
+      ],
+      "dry_run": false,
+      "started_at": "2026-04-13T17:37:11.702736",
+      "finished_at": "2026-04-13T17:45:58.533676",
+      "status": "success",
+      "exit_code": 0,
+      "duration": "8m 46s",
+      "log_file": "migration_20260413_173725.log",
+      "error_file": "errors_20260413_173725.csv",
+      "summary_file": "summary_20260413_173725.txt",
+      "output_file": null
+    }
+  ]
+}

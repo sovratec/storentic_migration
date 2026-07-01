@@ -1,0 +1,17 @@
+[Unit]
+Description=Storentic Migration Flask UI
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/home/YOUR_LINUX_USER/storentic_migration
+ExecStart=/home/YOUR_LINUX_USER/storentic_migration/venv/bin/python3 app.py
+EnvironmentFile=/home/YOUR_LINUX_USER/storentic_migration/.env
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
