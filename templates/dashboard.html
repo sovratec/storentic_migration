@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Run Migration — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">Run Migration</span>
+{% endblock %}
+
+{% block content %}
+
+{# ── Busy banner ─────────────────────────────────────────────────────────────── #}
+{% if busy %}
+<div class="busy-banner">
+  <span class="spinner-border" style="width:.9rem;height:.9rem;border-width:.15em;color:var(--warning)"></span>
+  <span>
+    A migration is already running.
+    <a href="{{ url_for('view_run', run_id=active_run_id) }}"
+       style="color:var(--warning);font-weight:700;text-decoration:underline;text-underline-offset:2px">
+      View live progress →
+    </a>
+  </span>
+</div>
+{% endif %}
+
+{# ── Stats row ───────────────────────────────────────────────────────────────── #}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon blue"><i class="bi bi-play-circle-fill"></i></div>
+    <div class="stat-body">
+      <div class="stat-value" id="stat-total">—</div>
+      <div class="stat-label">Total Runs</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><i class="bi bi-check-circle-fill"></i></div>
+    <div class="stat-body">
+      <div class="stat-value" id="stat-success">—</div>
+      <div class="stat-label">Successful</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon red"><i class="bi bi-x-circle-fill"></i></div>
+    <div class="stat-body">
+      <div class="stat-value" id="stat-errors">—</div>
+      <div class="stat-label">Errors</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange"><i class="bi bi-clock-history"></i></div>
+    <div class="stat-body">
+      <div class="stat-value" id="stat-last-label" style="font-size:1rem;margin-top:.15rem">—</div>
+      <div class="stat-label">Last Run</div>
+      <div class="stat-sub" id="stat-last-time"></div>
+    </div>
+  </div>
+</div>
+
+{# ── Two-column layout ───────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:1fr 360px;gap:1.25rem;align-items:start">
+
+  {# ── Left: migration launcher ─────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-play-circle-fill"></i> Run Migration</h2>
+    </div>
+    <div class="card-body">
+
+      <form id="runForm" method="post" action="{{ url_for('run_migration') }}" enctype="multipart/form-data">
+
+        {# Migration type selector grouped by category #}
+        <div style="margin-bottom:1.25rem">
+          <p style="font-size:.78rem;font-weight:700;color:var(--text-primary);margin:0 0 .75rem">
+            Select Migration Type
+          </p>
+          {% set groups = migration_groups %}
+          {% for group_name, items in groups.items() %}
+            <div class="migration-group-label">{{ group_name }}</div>
+            <div class="migration-cards-grid" style="margin-bottom:.25rem">
+              {% for key, mt in items %}
+              <div>
+                <input type="radio" class="mig-card-input" name="migration_type"
+                       id="mt_{{ key }}" value="{{ key }}"
+                       {% if mt.disabled %}disabled{% endif %}
+                       {% if loop.first and loop.index0 == 0 and not selected_type %}
+                         {% if group_name == groups.keys()|list|first %}checked{% endif %}
+                       {% endif %}
+                       {% if selected_type == key %}checked{% endif %}
+                       onchange="onTypeChange(this.value)">
+                <label class="mig-card-label{% if mt.disabled %} mig-card-disabled{% endif %}"
+                       for="mt_{{ key }}">
+                  <i class="mig-card-icon bi {{ mt.icon }}"></i>
+                  <span class="mig-card-name">{{ mt.label }}</span>
+                  <span class="mig-card-desc">{{ mt.description }}</span>
+                  {% if mt.disabled %}
+                  <span class="mig-card-disabled-badge">Coming soon</span>
+                  {% endif %}
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        {# Dynamic file inputs #}
+        <div id="fileSection" class="file-input-section">
+          <div class="skeleton skeleton-block"></div>
+        </div>
+
+        {# Dry run toggle #}
+        <div class="dryrun-toggle">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="dryRun" name="dry_run" value="1"
+                 style="width:2.2em;height:1.1em;cursor:pointer">
+          <div>
+            <label class="form-check-label" for="dryRun" style="cursor:pointer">
+              Dry Run Mode
+            </label>
+            <span class="dryrun-desc">Preview what would be inserted — no DB writes.</span>
+          </div>
+        </div>
+
+        <div style="margin-top:1.25rem">
+          <button type="submit" class="btn-run" id="submitBtn" {% if busy %}disabled{% endif %}>
+            <i class="bi bi-{% if busy %}hourglass-split{% else %}play-fill{% endif %}"></i>
+            {% if busy %}Migration in Progress…{% else %}Start Migration{% endif %}
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  {# ── Right: recent runs ───────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-clock-history"></i> Recent Runs</h2>
+      <a href="{{ url_for('history') }}" class="btn btn-sm btn-outline-secondary" style="font-size:.72rem">
+        View all
+      </a>
+    </div>
+
+    {% if recent_runs %}
+    <div style="padding:0">
+      {% for run in recent_runs %}
+      <a href="{{ url_for('view_run', run_id=run.run_id) }}"
+         style="display:flex;align-items:flex-start;gap:.75rem;padding:.875rem 1.25rem;
+                border-bottom:1px solid var(--border);text-decoration:none;
+                transition:background .15s;"
+         onmouseover="this.style.background='var(--surface-2)'"
+         onmouseout="this.style.background=''">
+
+        {# Status dot #}
+        <div style="margin-top:.2rem;flex-shrink:0">
+          {% if run.status == 'success' %}
+            <i class="bi bi-check-circle-fill" style="color:var(--success);font-size:.9rem"></i>
+          {% elif run.status == 'error' %}
+            <i class="bi bi-x-circle-fill" style="color:var(--danger);font-size:.9rem"></i>
+          {% elif run.status == 'running' %}
+            <span class="spinner-border" style="width:.75rem;height:.75rem;border-width:.12em;color:var(--warning)"></span>
+          {% else %}
+            <i class="bi bi-circle" style="color:var(--text-muted);font-size:.9rem"></i>
+          {% endif %}
+        </div>
+
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+            <span style="font-size:.8rem;font-weight:600;color:var(--text-primary)">{{ run.label }}</span>
+            {% if run.dry_run %}
+              <span class="badge-status badge-dryrun" style="font-size:.62rem">dry</span>
+            {% endif %}
+          </div>
+          <div style="font-size:.7rem;color:var(--text-muted);margin-top:.15rem;display:flex;gap:.4rem">
+            <span class="rel-time" data-ts="{{ run.started_at }}"></span>
+            {% if run.duration %}<span>· {{ run.duration }}</span>{% endif %}
+          </div>
+        </div>
+
+        <i class="bi bi-chevron-right" style="font-size:.65rem;color:var(--text-muted);margin-top:.25rem;flex-shrink:0"></i>
+      </a>
+      {% endfor %}
+      {% if recent_runs|length == 0 %}
+        {# handled below #}
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-rocket-takeoff empty-icon"></i>
+      <p class="empty-title">No migrations yet</p>
+      <p class="empty-desc">Select a type above and click Start Migration.</p>
+    </div>
+    {% endif %}
+
+    <div style="padding:.75rem 1.25rem;border-top:1px solid var(--border);background:var(--surface-2);border-radius:0 0 var(--radius-lg) var(--radius-lg)">
+      <a href="{{ url_for('history') }}"
+         style="font-size:.75rem;font-weight:600;color:var(--brand-blue);text-decoration:none">
+        Full history &rarr;
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MIGRATION_TYPES = {{ migration_types_json | safe }};
+const EXISTING_FILES  = {{ existing_files_json | safe }};
+
+// Select first migration type on load
+document.addEventListener('DOMContentLoaded', () => {
+  const checked = document.querySelector('input[name="migration_type"]:checked');
+  if (!checked) {
+    const first = document.querySelector('input[name="migration_type"]');
+    if (first) { first.checked = true; onTypeChange(first.value); }
+  } else {
+    onTypeChange(checked.value);
+  }
+
+  // Load stats
+  fetch('/api/stats', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('stat-total').textContent   = d.total ?? '0';
+      document.getElementById('stat-success').textContent = d.success ?? '0';
+      document.getElementById('stat-errors').textContent  = d.errors ?? '0';
+      if (d.last_run) {
+        const lab = document.getElementById('stat-last-label');
+        const sub = document.getElementById('stat-last-time');
+        lab.textContent = d.last_run.status === 'success' ? '✓ Done'
+                        : d.last_run.status === 'error'   ? '✗ Error'
+                        : d.last_run.status === 'running' ? '⟳ Running'
+                        : d.last_run.status;
+        lab.style.color = d.last_run.status === 'success' ? 'var(--success)'
+                        : d.last_run.status === 'error'   ? 'var(--danger)'
+                        : 'var(--warning)';
+        sub.textContent = relTime(d.last_run.started_at) + ' · ' + (d.last_run.label || '');
+      } else {
+        document.getElementById('stat-last-label').textContent = '—';
+      }
+    })
+    .catch(() => {});
+});
+
+function onTypeChange(typeKey) {
+  const mt      = MIGRATION_TYPES[typeKey];
+  const section = document.getElementById('fileSection');
+  if (!mt) return;
+  section.innerHTML = '';
+
+  if (!mt.files || mt.files.length === 0) {
+    section.innerHTML = `
+      <div class="alert" style="background:var(--surface-2);border:1px solid var(--border);
+           border-radius:var(--radius);padding:.75rem 1rem;font-size:.8rem;color:var(--text-muted)">
+        <i class="bi bi-info-circle" style="margin-right:.4rem"></i>
+        No input files required — this utility runs directly against the database.
+      </div>`;
+    return;
+  }
+
+  mt.files.forEach(f => {
+    const existingOpts = EXISTING_FILES.length
+      ? EXISTING_FILES.map(name => `<option value="${name}">${name}</option>`).join('')
+      : '<option value="" disabled>No files in data/ folder</option>';
+
+    const isOptional = f.optional === true;
+    const labelHtml  = isOptional
+      ? `${f.label} <span class="badge bg-secondary fw-normal" style="font-size:.7rem;vertical-align:middle">Optional</span>`
+      : `${f.label}`;
+    const skipOpt    = isOptional ? '<option value="">— skip (not required) —</option>' : '<option value="">— select a file —</option>';
+
+    const block = document.createElement('div');
+    block.className = 'file-input-block' + (isOptional ? ' file-input-optional' : '');
+    block.innerHTML = `
+      <label class="form-label">${labelHtml}</label>
+      <div class="file-tab-bar">
+        <button type="button" class="file-tab-btn active"
+                id="tab_up_${f.key}" onclick="switchTab('${f.key}','upload',this)">
+          <i class="bi bi-upload" style="margin-right:.3rem"></i>Upload new
+        </button>
+        <button type="button" class="file-tab-btn"
+                id="tab_ex_${f.key}" onclick="switchTab('${f.key}','existing',this)">
+          <i class="bi bi-folder2-open" style="margin-right:.3rem"></i>Use existing
+        </button>
+      </div>
+      <div id="pane_upload_${f.key}">
+        <input type="file" class="form-control form-control-sm" name="${f.key}_upload" accept="${f.accept}">
+        <div class="file-hint">${f.hint}</div>
+      </div>
+      <div id="pane_existing_${f.key}" style="display:none">
+        <select class="form-select form-select-sm" name="${f.key}_existing">
+          ${skipOpt}
+          ${existingOpts}
+        </select>
+        <div class="file-hint">Files currently in the <code>data/</code> folder${isOptional ? ' — leave blank to skip' : ''}</div>
+      </div>
+    `;
+    section.appendChild(block);
+  });
+}
+
+function switchTab(key, mode, btn) {
+  document.querySelectorAll(`#tab_up_${key}, #tab_ex_${key}`)
+          .forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`pane_upload_${key}`).style.display   = mode === 'upload'   ? '' : 'none';
+  document.getElementById(`pane_existing_${key}`).style.display = mode === 'existing' ? '' : 'none';
+}
+
+function relTime(dateStr) {
+  const d = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (d < 60)    return 'just now';
+  if (d < 3600)  return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  return Math.floor(d / 86400) + 'd ago';
+}
+</script>
+{% endblock %}

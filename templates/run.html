@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.run_id[:8] }} — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <a href="{{ url_for('history') }}" class="breadcrumb-item">History</a>
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">{{ run.run_id[:8] }}</span>
+{% endblock %}
+
+{% block content %}
+
+{# ── Page header ─────────────────────────────────────────────────────────────── #}
+<div class="page-header">
+  <div>
+    <h1 class="page-title" style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap">
+      {{ run.label }}
+      {% if run.dry_run %}
+        <span class="badge-status badge-dryrun"><i class="bi bi-eye"></i> Dry Run</span>
+      {% endif %}
+    </h1>
+    <p class="page-subtitle" style="display:flex;align-items:center;gap:.375rem">
+      <span class="col-mono font-mono">{{ run.run_id }}</span>
+      <i class="bi bi-clipboard copy-btn" id="copyRunId" title="Copy run ID"
+         onclick="copyText('{{ run.run_id }}', this)"></i>
+    </p>
+  </div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <span id="statusBadge" class="badge-status
+      {% if run.status == 'success' %}badge-success
+      {% elif run.status == 'error' %}badge-error
+      {% elif run.status == 'running' %}badge-running
+      {% else %}badge-neutral{% endif %}"
+      style="font-size:.82rem;padding:.35rem .875rem">
+      {% if run.status == 'running' %}
+        <span class="spinner-border" style="width:.65rem;height:.65rem;border-width:.12em"></span>
+      {% elif run.status == 'success' %}
+        <i class="bi bi-check-circle"></i>
+      {% elif run.status == 'error' %}
+        <i class="bi bi-x-circle"></i>
+      {% endif %}
+      {{ run.status | title }}
+    </span>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-play-circle me-1"></i>New Run
+    </a>
+  </div>
+</div>
+
+{# ── Two-column layout ───────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:1fr 300px;gap:1.25rem;align-items:start">
+
+  {# ── Terminal ──────────────────────────────────────────────────────────────── #}
+  <div class="card" style="overflow:hidden">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+      </div>
+      <span class="terminal-title">{{ run.label }} — Live Output</span>
+      <div class="terminal-actions">
+        <button class="btn btn-xs" onclick="copyTerminal()"
+                style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+                       color:#9CA3AF;font-size:.68rem" title="Copy output">
+          <i class="bi bi-clipboard me-1"></i>Copy
+        </button>
+        <button class="btn btn-xs" onclick="toggleScroll()" id="scrollBtn"
+                style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+                       color:#9CA3AF;font-size:.68rem">
+          <i class="bi bi-lock" id="scrollIcon"></i>
+          <span id="scrollLabel" style="margin-left:.2rem">Auto</span>
+        </button>
+      </div>
+    </div>
+    <div class="terminal-box" id="terminal"></div>
+  </div>
+
+  {# ── Sidebar panel ─────────────────────────────────────────────────────────── #}
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    {# Run details card #}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-info-circle"></i> Run Details</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem">
+        <table class="meta-table">
+          <tr>
+            <td>Type</td>
+            <td style="font-weight:600">{{ run.label }}</td>
+          </tr>
+          <tr>
+            <td>Started</td>
+            <td>
+              {{ run.started_at[:19].replace('T',' ') }}
+              <div class="rel-time" data-ts="{{ run.started_at }}"></div>
+            </td>
+          </tr>
+          {% if run.finished_at %}
+          <tr>
+            <td>Finished</td>
+            <td>{{ run.finished_at[:19].replace('T',' ') }}</td>
+          </tr>
+          {% endif %}
+          {% if run.duration %}
+          <tr>
+            <td>Duration</td>
+            <td style="font-weight:600;color:var(--brand-blue)">{{ run.duration }}</td>
+          </tr>
+          {% endif %}
+          {% if run.files %}
+          <tr>
+            <td>Files</td>
+            <td>
+              {% for f in run.files %}
+                <div class="truncate" title="{{ f }}" style="max-width:150px;font-size:.72rem">
+                  <i class="bi bi-file-earmark" style="font-size:.65rem"></i> {{ f }}
+                </div>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td>Mode</td>
+            <td>
+              {% if run.dry_run %}
+                <span style="color:var(--brand-orange);font-weight:600">
+                  <i class="bi bi-eye me-1"></i>Dry Run
+                </span>
+              {% else %}
+                <span style="color:var(--success);font-weight:600">
+                  <i class="bi bi-database me-1"></i>Live
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% if run.exit_code is not none %}
+          <tr>
+            <td>Exit code</td>
+            <td class="col-mono font-mono {{ 'text-success' if run.exit_code == 0 else 'text-danger' }}">
+              {{ run.exit_code }}
+            </td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+
+    {# Summary card (populated after run completes) #}
+    <div class="card" id="summaryCard" style="display:none">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-bar-chart-fill"></i> Summary</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem" id="summaryBody"></div>
+    </div>
+
+    {# Downloads card #}
+    <div class="card" id="downloadsCard">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-download"></i> Downloads</h3>
+      </div>
+      <div id="downloadsBody">
+
+        {% macro dl_row(icon, icon_color, label, filename, dir, dl_url, preview_url, outline_cls) %}
+        {% if filename %}
+        <div style="padding:.7rem 1rem;border-bottom:1px solid var(--border)">
+          {# Label + icon #}
+          <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.35rem">
+            <i class="bi {{ icon }}" style="color:{{ icon_color }};font-size:.85rem"></i>
+            <span style="font-size:.78rem;font-weight:600">{{ label }}</span>
+          </div>
+          {# Full path #}
+          <div style="display:flex;align-items:center;gap:.35rem;margin-bottom:.5rem;
+                      background:var(--surface-2);border:1px solid var(--border);
+                      border-radius:var(--radius-sm);padding:.25rem .5rem;overflow:hidden">
+            <code style="font-size:.62rem;color:var(--text-secondary);flex:1;
+                         overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                  title="{{ dir }}\{{ filename }}">{{ dir }}\{{ filename }}</code>
+            <button onclick="copyPath('{{ dir }}\\{{ filename }}')"
+                    title="Copy full path"
+                    style="background:none;border:none;cursor:pointer;padding:0;
+                           color:var(--text-muted);font-size:.8rem;flex-shrink:0;line-height:1">
+              <i class="bi bi-clipboard" id="cp_{{ filename | replace('.','_') }}"></i>
+            </button>
+          </div>
+          {# Action buttons #}
+          <div style="display:flex;gap:.35rem">
+            <a href="{{ preview_url }}"
+               class="btn btn-xs btn-outline-secondary" style="flex:1;text-align:center">
+              <i class="bi bi-eye me-1"></i>Preview
+            </a>
+            <a href="{{ dl_url }}"
+               class="btn btn-xs {{ outline_cls }}" style="flex:1;text-align:center">
+              <i class="bi bi-download me-1"></i>Download
+            </a>
+          </div>
+        </div>
+        {% endif %}
+        {% endmacro %}
+
+        {{ dl_row(
+            'bi-file-text',              'var(--text-muted)',  'Full Log',
+            run.log_file,     logs_dir,
+            url_for('download_log',    filename=run.log_file     | basename),
+            url_for('view_log',        filename=run.log_file     | basename),
+            'btn-outline-secondary'
+        ) }}
+        {{ dl_row(
+            'bi-skip-forward',           'var(--warning)',     'Skipped CSV',
+            run.skipped_file, logs_dir,
+            url_for('download_log',    filename=run.skipped_file | basename),
+            url_for('view_log',        filename=run.skipped_file | basename),
+            'btn-outline-warning'
+        ) }}
+        {{ dl_row(
+            'bi-exclamation-triangle',   'var(--danger)',      'Errors CSV',
+            run.error_file,   logs_dir,
+            url_for('download_log',    filename=run.error_file   | basename),
+            url_for('view_log',        filename=run.error_file   | basename),
+            'btn-outline-danger'
+        ) }}
+        {{ dl_row(
+            'bi-card-list',              'var(--brand-blue)',  'Summary',
+            run.summary_file, logs_dir,
+            url_for('download_log',    filename=run.summary_file | basename),
+            url_for('view_log',        filename=run.summary_file | basename),
+            'btn-outline-primary'
+        ) }}
+        {{ dl_row(
+            'bi-file-earmark-spreadsheet','var(--success)',    'Output Excel',
+            run.output_file,  output_dir,
+            url_for('download_output', filename=run.output_file  | basename),
+            url_for('download_output', filename=run.output_file  | basename),
+            'btn-outline-success'
+        ) }}
+
+        {% if not (run.log_file or run.skipped_file or run.error_file or run.summary_file or run.output_file) %}
+        <div style="padding:.875rem 1rem;font-size:.78rem;color:var(--text-muted)" id="noFilesYet">
+          <i class="bi bi-hourglass-split me-1"></i>Available after run completes.
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RUN_ID         = "{{ run.run_id }}";
+const INITIAL_STATUS = "{{ run.status }}";
+
+let autoScroll = true;
+let evtSource  = null;
+const terminal = document.getElementById('terminal');
+const badge    = document.getElementById('statusBadge');
+
+function toggleScroll() {
+  autoScroll = !autoScroll;
+  document.getElementById('scrollLabel').textContent = autoScroll ? 'Auto' : 'Lock';
+  document.getElementById('scrollIcon').className   = autoScroll ? 'bi bi-lock' : 'bi bi-unlock';
+}
+
+function nowTs() {
+  return new Date().toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function lineClass(text) {
+  if (/error|failed|❌|traceback/i.test(text)) return 't-error';
+  if (/warning|⚠|skipped/i.test(text))        return 't-warning';
+  if (/✅|inserted|updated|done|success|completed/i.test(text)) return 't-success';
+  if (/dry run|DRY RUN/i.test(text))           return 't-info';
+  if (/^={3,}|^-{3,}/i.test(text))             return 't-muted';
+  return 't-default';
+}
+
+function appendLine(text, cls) {
+  const line = document.createElement('div');
+  line.className = 'terminal-line';
+
+  const ts = document.createElement('span');
+  ts.className   = 'terminal-ts';
+  ts.textContent = nowTs();
+
+  const txt = document.createElement('span');
+  txt.className   = 'terminal-text ' + (cls || lineClass(text));
+  txt.textContent = text;
+
+  line.append(ts, txt);
+  terminal.appendChild(line);
+  if (autoScroll) terminal.scrollTop = terminal.scrollHeight;
+}
+
+function setStatus(status) {
+  badge.className = 'badge-status ';
+  if (status === 'success') {
+    badge.className += 'badge-success';
+    badge.innerHTML  = '<i class="bi bi-check-circle"></i> Success';
+  } else if (status === 'error') {
+    badge.className += 'badge-error';
+    badge.innerHTML  = '<i class="bi bi-x-circle"></i> Error';
+  } else if (status === 'running') {
+    badge.className += 'badge-running';
+    badge.innerHTML  = '<span class="spinner-border" style="width:.65rem;height:.65rem;border-width:.12em"></span> Running';
+  } else {
+    badge.className += 'badge-neutral';
+    badge.innerHTML  = status;
+  }
+  badge.style.fontSize  = '.82rem';
+  badge.style.padding   = '.35rem .875rem';
+}
+
+function startSSE() {
+  evtSource = new EventSource(`/stream/${RUN_ID}`);
+  evtSource.addEventListener('log',       e => appendLine(e.data));
+  evtSource.addEventListener('heartbeat', () => {});
+  evtSource.addEventListener('status',    e => {
+    setStatus(e.data);
+    if (e.data !== 'running') {
+      evtSource.close();
+      setTimeout(fetchSummary, 800);
+    }
+  });
+  evtSource.onerror = () => {
+    evtSource.close();
+    appendLine('— stream disconnected —', 't-muted');
+  };
+}
+
+function fetchSummary() {
+  fetch(`/api/status?run_id=${RUN_ID}`, { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.summary_text) {
+        const card = document.getElementById('summaryCard');
+        const body = document.getElementById('summaryBody');
+        const rows = d.summary_text.trim().split('\n')
+          .map(l => {
+            const m = l.match(/^(.+?):\s*(.+)$/);
+            return m ? `<tr><td>${m[1].trim()}</td><td>${m[2].trim()}</td></tr>` : null;
+          }).filter(Boolean);
+        if (rows.length) {
+          body.innerHTML = `<table class="summary-kv" style="width:100%">${rows.join('')}</table>`;
+        } else {
+          body.innerHTML = `<pre style="margin:0;font-size:.75rem;white-space:pre-wrap">${d.summary_text}</pre>`;
+        }
+        card.style.display = '';
+      }
+      if (d.status !== 'running') {
+        const noFiles = document.getElementById('noFilesYet');
+        if (noFiles && (d.log_file || d.skipped_file || d.error_file || d.summary_file)) {
+          location.reload();
+        }
+      }
+    });
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.className = btn.className.replace('bi-clipboard', 'bi-clipboard-check') + ' copied';
+    setTimeout(() => {
+      btn.className = btn.className.replace('bi-clipboard-check', 'bi-clipboard').replace(' copied', '');
+    }, 2000);
+  });
+}
+
+function copyTerminal() {
+  const lines = [...terminal.querySelectorAll('.terminal-text')].map(el => el.textContent).join('\n');
+  navigator.clipboard.writeText(lines);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.rel-time[data-ts]').forEach(el => {
+    const d = Math.floor((Date.now() - new Date(el.dataset.ts)) / 1000);
+    el.textContent = d < 60 ? 'just now' : d < 3600 ? Math.floor(d/60)+'m ago' : Math.floor(d/3600)+'h ago';
+  });
+
+  if (INITIAL_STATUS === 'running') {
+    startSSE();
+  } else {
+    // Run already completed — load the full log from the log file
+    loadCompletedLog();
+  }
+});
+
+async function loadCompletedLog() {
+  try {
+    appendLine('Loading log…', 't-muted');
+    const r = await fetch(`/api/run-log/${RUN_ID}`, { credentials: 'same-origin' });
+    const d = await r.json();
+    terminal.innerHTML = '';   // clear the "Loading…" placeholder
+    if (d.lines && d.lines.length > 0) {
+      d.lines.forEach(line => appendLine(line));
+    } else {
+      appendLine('No log output recorded for this run.', 't-muted');
+    }
+  } catch(e) {
+    terminal.innerHTML = '';
+    appendLine('Could not load log content: ' + e, 't-error');
+  }
+}
+
+function copyPath(path) {
+  navigator.clipboard.writeText(path).then(() => {
+    // Find the icon by converting the path to a safe ID
+    const safeId = 'cp_' + path.split('\\').pop().replace(/\./g, '_');
+    const icon = document.getElementById(safeId);
+    if (icon) {
+      icon.className = 'bi bi-clipboard-check';
+      icon.style.color = 'var(--success)';
+      setTimeout(() => {
+        icon.className = 'bi bi-clipboard';
+        icon.style.color = '';
+      }, 2000);
+    }
+  });
+}
+</script>
+{% endblock %}

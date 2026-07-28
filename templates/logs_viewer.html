@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Skipped &amp; Errors — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">Skipped &amp; Errors</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Skipped &amp; Error Logs</h1>
+    <p class="page-subtitle">Review records skipped during migrations and raw log files</p>
+  </div>
+  <a href="{{ url_for('dashboard') }}" class="btn-run" style="text-decoration:none">
+    <i class="bi bi-play-fill"></i> New Run
+  </a>
+</div>
+
+{# ── Tabs ─────────────────────────────────────────────────────────────────────── #}
+<div style="display:flex;gap:.35rem;margin-bottom:1.25rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;flex-wrap:wrap">
+  <button class="file-tab-btn active" id="tab-skipped" onclick="showTab('skipped',this)">
+    <i class="bi bi-skip-forward me-1"></i>Skipped CSVs
+    {% if skipped_files %}
+      <span style="background:var(--warning);color:#fff;border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">{{ skipped_files|length }}</span>
+    {% endif %}
+  </button>
+  <button class="file-tab-btn" id="tab-errors" onclick="showTab('errors',this)">
+    <i class="bi bi-exclamation-triangle me-1"></i>Error CSVs
+    {% if error_files %}
+      <span style="background:var(--danger);color:#fff;border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">{{ error_files|length }}</span>
+    {% endif %}
+  </button>
+  <button class="file-tab-btn" id="tab-logs" onclick="showTab('logs',this)">
+    <i class="bi bi-file-text me-1"></i>Log Files
+    {% if log_files %}
+      <span style="background:var(--brand-blue);color:#fff;border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">{{ log_files|length }}</span>
+    {% endif %}
+  </button>
+  <button class="file-tab-btn" id="tab-output" onclick="showTab('output',this)">
+    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Output Files
+    {% if output_files %}
+      <span style="background:var(--success);color:#fff;border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">{{ output_files|length }}</span>
+    {% endif %}
+  </button>
+</div>
+
+{# ── Skipped CSVs ────────────────────────────────────────────────────────────── #}
+<div id="pane-skipped">
+  {% if skipped_files %}
+  <div class="card">
+    <div class="card-body-p0">
+      {% for f in skipped_files %}
+      <div class="dl-row">
+        <div class="dl-info" style="flex:1;min-width:0">
+          <i class="bi bi-skip-forward" style="color:var(--warning);flex-shrink:0"></i>
+          <div style="min-width:0">
+            <div class="dl-name">{{ f.name }}</div>
+            <div style="font-size:.68rem;color:var(--text-muted)">{{ f.mtime }} &nbsp;·&nbsp; {{ f.size_kb }} KB</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.4rem;flex-shrink:0">
+          <a href="{{ url_for('view_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-secondary">
+            <i class="bi bi-eye me-1"></i>View
+          </a>
+          <a href="{{ url_for('download_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-warning">
+            <i class="bi bi-download me-1"></i>CSV
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-check-circle empty-icon" style="color:var(--success)"></i>
+      <p class="empty-title">No skipped rows found</p>
+      <p class="empty-desc">Skipped row CSVs appear here after migration runs.</p>
+    </div>
+  </div></div>
+  {% endif %}
+</div>
+
+{# ── Error CSVs ──────────────────────────────────────────────────────────────── #}
+<div id="pane-errors" style="display:none">
+  {% if error_files %}
+  <div class="card">
+    <div class="card-body-p0">
+      {% for f in error_files %}
+      <div class="dl-row">
+        <div class="dl-info" style="flex:1;min-width:0">
+          <i class="bi bi-exclamation-triangle" style="color:var(--danger);flex-shrink:0"></i>
+          <div style="min-width:0">
+            <div class="dl-name">{{ f.name }}</div>
+            <div style="font-size:.68rem;color:var(--text-muted)">{{ f.mtime }} &nbsp;·&nbsp; {{ f.size_kb }} KB</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.4rem;flex-shrink:0">
+          <a href="{{ url_for('view_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-secondary">
+            <i class="bi bi-eye me-1"></i>View
+          </a>
+          <a href="{{ url_for('download_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-danger">
+            <i class="bi bi-download me-1"></i>CSV
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-check-circle empty-icon" style="color:var(--success)"></i>
+      <p class="empty-title">No error logs</p>
+      <p class="empty-desc">Error CSVs are generated when unexpected row-level errors occur.</p>
+    </div>
+  </div></div>
+  {% endif %}
+</div>
+
+{# ── Log Files ───────────────────────────────────────────────────────────────── #}
+<div id="pane-logs" style="display:none">
+  {% if log_files %}
+  <div class="card">
+    <div class="card-body-p0">
+      {% for f in log_files %}
+      <div class="dl-row">
+        <div class="dl-info" style="flex:1;min-width:0">
+          <i class="bi bi-file-text" style="color:var(--brand-blue);flex-shrink:0"></i>
+          <div style="min-width:0">
+            <div class="dl-name">{{ f.name }}</div>
+            <div style="font-size:.68rem;color:var(--text-muted)">{{ f.mtime }} &nbsp;·&nbsp; {{ f.size_kb }} KB</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.4rem;flex-shrink:0">
+          <a href="{{ url_for('view_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-secondary">
+            <i class="bi bi-eye me-1"></i>View
+          </a>
+          <a href="{{ url_for('download_log', filename=f.name) }}"
+             class="btn btn-xs btn-outline-secondary">
+            <i class="bi bi-download me-1"></i>Log
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-file-text empty-icon"></i>
+      <p class="empty-title">No log files yet</p>
+      <p class="empty-desc">Migration log files will appear here after runs complete.</p>
+    </div>
+  </div></div>
+  {% endif %}
+</div>
+
+{# ── Output Files ────────────────────────────────────────────────────────────── #}
+<div id="pane-output" style="display:none">
+  {% if output_files %}
+  <div class="card">
+    <div class="card-body-p0">
+      {% for f in output_files %}
+      <div class="dl-row">
+        <div class="dl-info" style="flex:1;min-width:0">
+          <i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);flex-shrink:0"></i>
+          <div style="min-width:0">
+            <div class="dl-name">{{ f.name }}</div>
+            <div style="font-size:.68rem;color:var(--text-muted)">{{ f.mtime }} &nbsp;·&nbsp; {{ f.size_kb }} KB</div>
+          </div>
+        </div>
+        <a href="{{ url_for('download_output', filename=f.name) }}"
+           class="btn btn-xs btn-outline-success" style="flex-shrink:0">
+          <i class="bi bi-download me-1"></i>Download
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-folder2-open empty-icon"></i>
+      <p class="empty-title">No output files</p>
+      <p class="empty-desc">Excel output files (e.g. review reports) will appear here.</p>
+    </div>
+  </div></div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name, btn) {
+  ['skipped','errors','logs','output'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = (t === name) ? '' : 'none';
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+  });
+}
+</script>
+{% endblock %}

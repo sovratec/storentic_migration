@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}XLSX → CSV Converter — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">XLSX → CSV</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">XLSX → CSV Converter</h1>
+    <p class="page-subtitle">Scan a folder, preview Excel files, then convert and delete originals</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:1.25rem;align-items:start">
+
+  {# ── Left: main panel ──────────────────────────────────────────────────────── #}
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    {# Step 1 — folder input #}
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-folder2-open"></i> Step 1 — Select Folder</h2>
+      </div>
+      <div class="card-body">
+
+        <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:.5rem">
+          Folder path on this server
+        </label>
+        <div style="display:flex;gap:.5rem">
+          <input type="text" id="folderInput" class="form-control form-control-sm"
+                 value="{{ default_folder }}"
+                 placeholder="e.g. C:\GitHub\storentic_migration\data"
+                 style="font-family:monospace;font-size:.78rem">
+          <button class="btn btn-sm btn-primary" onclick="scanFolder()" id="scanBtn"
+                  style="white-space:nowrap;flex-shrink:0">
+            <i class="bi bi-search me-1"></i>Scan
+          </button>
+        </div>
+
+        {# Quick-pick buttons #}
+        <div style="margin-top:.625rem;display:flex;gap:.4rem;flex-wrap:wrap">
+          <span style="font-size:.7rem;color:var(--text-muted);align-self:center">Quick:</span>
+          <button class="btn btn-xs btn-outline-secondary"
+                  onclick="setFolder('{{ default_folder }}')">
+            <i class="bi bi-folder me-1"></i>data/
+          </button>
+          <button class="btn btn-xs btn-outline-secondary"
+                  onclick="setFolder('{{ default_folder }}\\Archive')">
+            <i class="bi bi-archive me-1"></i>data/Archive
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    {# Step 2 — file list + warning #}
+    <div id="step2" style="display:none">
+
+      {# ⚠ Warning banner #}
+      <div style="background:#FEF3C7;border:1px solid #FDE68A;border-left:4px solid #F59E0B;
+                  border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;gap:.625rem;margin-bottom:.5rem">
+          <i class="bi bi-exclamation-triangle-fill" style="color:#D97706;font-size:1.1rem;flex-shrink:0"></i>
+          <strong style="font-size:.85rem;color:#92400E">Warning — Excel files will be permanently deleted</strong>
+        </div>
+        <ul style="margin:0;padding-left:1.25rem;font-size:.78rem;color:#92400E;line-height:1.7">
+          <li>Each <code>.xlsx</code> / <code>.xls</code> file will be converted to <code>.csv</code></li>
+          <li>The original Excel file will be <strong>deleted immediately after conversion</strong></li>
+          <li>Multi-sheet workbooks produce one CSV per sheet (e.g. <code>File_Sheet1.csv</code>)</li>
+          <li>This action <strong>cannot be undone</strong> — back up important files first</li>
+        </ul>
+      </div>
+
+      {# File list #}
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <i class="bi bi-file-earmark-excel" style="color:#16A34A"></i>
+            Files to Convert
+            <span id="fileCountBadge"
+                  style="background:var(--brand-blue);color:#fff;border-radius:10px;
+                         padding:.1rem .5rem;font-size:.65rem;font-weight:700"></span>
+          </h2>
+          <button class="btn btn-xs btn-outline-secondary" onclick="scanFolder()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+          </button>
+        </div>
+        <div id="fileListBody" class="card-body-p0"></div>
+        <div style="padding:.875rem 1.25rem;border-top:1px solid var(--border);
+                    display:flex;align-items:center;justify-content:space-between;
+                    background:var(--surface-2);border-radius:0 0 var(--radius-lg) var(--radius-lg)">
+          <span style="font-size:.78rem;color:var(--text-muted)" id="totalSizeLabel"></span>
+          <button class="btn-run" id="convertBtn" onclick="startConvert()">
+            <i class="bi bi-arrow-repeat"></i>
+            Convert &amp; Delete All
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# Step 3 — results #}
+    <div id="step3" style="display:none">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="bi bi-check2-all"></i> Conversion Results</h2>
+          <button class="btn btn-xs btn-outline-secondary" onclick="resetAll()">
+            <i class="bi bi-arrow-left me-1"></i>Convert another folder
+          </button>
+        </div>
+        <div id="resultsBody" class="card-body-p0"></div>
+        <div style="padding:.875rem 1.25rem;border-top:1px solid var(--border);
+                    background:var(--surface-2);border-radius:0 0 var(--radius-lg) var(--radius-lg)">
+          <div id="resultsSummary" style="font-size:.82rem;font-weight:600"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Right: info panel ──────────────────────────────────────────────────────── #}
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-info-circle"></i> How it works</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem">
+        <ol style="margin:0;padding-left:1.25rem;font-size:.77rem;color:var(--text-secondary);line-height:1.9">
+          <li>Enter the <strong>full server-side path</strong> to the folder.</li>
+          <li>Click <strong>Scan</strong> to preview all Excel files found.</li>
+          <li>Review the warning — Excel files are <strong>deleted after conversion</strong>.</li>
+          <li>Click <strong>Convert &amp; Delete All</strong> to proceed.</li>
+        </ol>
+        <div style="margin-top:.875rem;padding:.625rem .75rem;background:var(--info-bg);
+                    border-radius:var(--radius-sm);font-size:.73rem;color:var(--info)">
+          <i class="bi bi-lightbulb me-1"></i>
+          <strong>Tip:</strong> Multi-sheet workbooks produce one CSV per sheet —
+          e.g. <code>Report_January.xlsx</code> with two sheets becomes
+          <code>Report_January_Summary.csv</code> and <code>Report_January_Detail.csv</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-shield-check"></i> Safety notes</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem">
+        <ul style="margin:0;padding-left:1.25rem;font-size:.77rem;color:var(--text-secondary);line-height:1.9">
+          <li>Only <code>.xlsx</code> and <code>.xls</code> files are affected.</li>
+          <li>CSV files already in the folder are <strong>not touched</strong>.</li>
+          <li>Conversion errors are shown per-file; other files still convert.</li>
+          <li>Backup your data folder before running on important files.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let scannedFolder = '';
+let scannedFiles  = [];
+
+function setFolder(path) {
+  document.getElementById('folderInput').value = path;
+}
+
+async function scanFolder() {
+  const folder  = document.getElementById('folderInput').value.trim();
+  const scanBtn = document.getElementById('scanBtn');
+  if (!folder) { alert('Please enter a folder path.'); return; }
+
+  scanBtn.disabled   = true;
+  scanBtn.innerHTML  = '<span class="spinner-border" style="width:.7rem;height:.7rem;border-width:.12em"></span> Scanning…';
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
+
+  try {
+    const r = await fetch('/api/convert/scan', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ folder }),
+      credentials: 'same-origin',
+    });
+    const d = await r.json();
+
+    if (!d.ok) {
+      alert('Error: ' + d.error);
+      return;
+    }
+
+    scannedFolder = d.folder;
+    scannedFiles  = d.files;
+
+    if (d.files.length === 0) {
+      alert('No Excel files (.xlsx / .xls) found in that folder.');
+      return;
+    }
+
+    renderFileList(d.files);
+    document.getElementById('step2').style.display = '';
+
+  } catch(e) {
+    alert('Request failed: ' + e);
+  } finally {
+    scanBtn.disabled  = false;
+    scanBtn.innerHTML = '<i class="bi bi-search me-1"></i>Scan';
+  }
+}
+
+function renderFileList(files) {
+  const body  = document.getElementById('fileListBody');
+  const badge = document.getElementById('fileCountBadge');
+  const total = document.getElementById('totalSizeLabel');
+
+  badge.textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+  let totalKb = files.reduce((s, f) => s + parseFloat(f.size_kb), 0);
+  total.textContent = 'Total: ' + (totalKb >= 1024 ? (totalKb/1024).toFixed(1) + ' MB' : totalKb.toFixed(1) + ' KB');
+
+  body.innerHTML = files.map(f => `
+    <div style="display:flex;align-items:center;gap:.75rem;padding:.7rem 1.25rem;
+                border-bottom:1px solid var(--border)">
+      <i class="bi bi-file-earmark-excel" style="color:#16A34A;font-size:1.05rem;flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.8rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;
+                    white-space:nowrap" title="${f.name}">${f.name}</div>
+        <div style="font-size:.68rem;color:var(--text-muted)">${f.size_kb} KB</div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-muted);flex-shrink:0;display:flex;
+                  align-items:center;gap:.3rem">
+        <i class="bi bi-arrow-right" style="color:var(--brand-orange)"></i>
+        <span style="color:var(--brand-orange);font-weight:600">.csv</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function startConvert() {
+  const confirmMsg =
+    `You are about to convert ${scannedFiles.length} Excel file(s) to CSV.\n\n` +
+    `⚠ The original XLSX files will be PERMANENTLY DELETED after conversion.\n\n` +
+    `Folder: ${scannedFolder}\n\n` +
+    `This cannot be undone. Proceed?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('convertBtn');
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spinner-border" style="width:.75rem;height:.75rem;border-width:.12em"></span> Converting…';
+
+  try {
+    const r = await fetch('/api/convert/run', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ folder: scannedFolder, confirmed: true }),
+      credentials: 'same-origin',
+    });
+    const d = await r.json();
+
+    if (!d.ok) {
+      alert('Error: ' + d.error);
+      return;
+    }
+
+    renderResults(d);
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = '';
+
+  } catch(e) {
+    alert('Request failed: ' + e);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Convert &amp; Delete All';
+  }
+}
+
+function renderResults(d) {
+  const body    = document.getElementById('resultsBody');
+  const summary = document.getElementById('resultsSummary');
+
+  body.innerHTML = d.results.map(r => {
+    if (r.ok) {
+      return `
+        <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.75rem 1.25rem;
+                    border-bottom:1px solid var(--border)">
+          <i class="bi bi-check-circle-fill" style="color:var(--success);font-size:1rem;
+             margin-top:.1rem;flex-shrink:0"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.8rem;font-weight:600;color:var(--text-primary)">${r.file}</div>
+            <div style="font-size:.7rem;color:var(--success);margin-top:.2rem">
+              Deleted &amp; converted →
+              ${r.csvs.map(c => `<code style="font-size:.68rem">${c}</code>`).join(', ')}
+            </div>
+          </div>
+        </div>`;
+    } else {
+      return `
+        <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.75rem 1.25rem;
+                    border-bottom:1px solid var(--border);background:#FFF5F5">
+          <i class="bi bi-x-circle-fill" style="color:var(--danger);font-size:1rem;
+             margin-top:.1rem;flex-shrink:0"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.8rem;font-weight:600;color:var(--danger)">${r.file}</div>
+            <div style="font-size:.7rem;color:var(--danger);margin-top:.2rem">${r.error}</div>
+          </div>
+        </div>`;
+    }
+  }).join('');
+
+  if (d.err_count === 0) {
+    summary.innerHTML = `<i class="bi bi-check-circle-fill me-1" style="color:var(--success)"></i>
+      <span style="color:var(--success)">${d.ok_count} file(s) converted and deleted successfully.</span>`;
+  } else {
+    summary.innerHTML = `
+      <i class="bi bi-exclamation-triangle-fill me-1" style="color:var(--warning)"></i>
+      <span style="color:var(--success)">${d.ok_count} converted</span>
+      &ensp;·&ensp;
+      <span style="color:var(--danger)">${d.err_count} failed</span>`;
+  }
+}
+
+function resetAll() {
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
+  scannedFiles  = [];
+  scannedFolder = '';
+}
+</script>
+{% endblock %}

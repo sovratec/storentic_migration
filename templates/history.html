@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Run History — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">History</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Run History</h1>
+    <p class="page-subtitle">All migration runs — newest first</p>
+  </div>
+  <a href="{{ url_for('dashboard') }}" class="btn-run" style="text-decoration:none">
+    <i class="bi bi-play-fill"></i> New Run
+  </a>
+</div>
+
+{# ── Filters ─────────────────────────────────────────────────────────────────── #}
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <div class="search-input" style="flex:1;min-width:200px;max-width:320px">
+    <i class="bi bi-search"></i>
+    <input type="text" id="searchInput" class="form-control form-control-sm"
+           placeholder="Filter by migration type or run ID…"
+           oninput="filterTable()" style="padding-left:2rem">
+  </div>
+  <select id="statusFilter" class="form-select form-select-sm" style="width:auto" onchange="filterTable()">
+    <option value="">All statuses</option>
+    <option value="success">✓ Success</option>
+    <option value="error">✗ Error</option>
+    <option value="running">Running</option>
+  </select>
+  <span id="rowCount" style="font-size:.75rem;color:var(--text-muted);white-space:nowrap"></span>
+</div>
+
+{% if runs %}
+<div class="card">
+  <div style="overflow-x:auto">
+    <table class="data-table" id="historyTable">
+      <thead>
+        <tr>
+          <th style="width:36px"></th>
+          <th>Migration</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Duration</th>
+          <th>Files</th>
+          <th>Mode</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr data-label="{{ run.label|lower }}" data-status="{{ run.status }}" data-runid="{{ run.run_id }}">
+          <td>
+            {% if run.status == 'success' %}
+              <i class="bi bi-check-circle-fill" style="color:var(--success)"></i>
+            {% elif run.status == 'error' %}
+              <i class="bi bi-x-circle-fill" style="color:var(--danger)"></i>
+            {% elif run.status == 'running' %}
+              <span class="spinner-border" style="width:.75rem;height:.75rem;border-width:.12em;color:var(--warning)"></span>
+            {% else %}
+              <i class="bi bi-circle" style="color:var(--text-muted)"></i>
+            {% endif %}
+          </td>
+          <td>
+            <div style="font-weight:600;font-size:.82rem">{{ run.label }}</div>
+            <div class="col-mono" style="margin-top:.1rem">{{ run.run_id[:8] }}</div>
+          </td>
+          <td>
+            {% if run.status == 'success' %}
+              <span class="badge-status badge-success"><i class="bi bi-check-circle"></i> Done</span>
+            {% elif run.status == 'error' %}
+              <span class="badge-status badge-error"><i class="bi bi-x-circle"></i> Error</span>
+            {% elif run.status == 'running' %}
+              <span class="badge-status badge-running"><i class="bi bi-arrow-repeat"></i> Running</span>
+            {% else %}
+              <span class="badge-status badge-neutral">{{ run.status }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="font-size:.8rem">{{ run.started_at[:19].replace('T',' ') }}</div>
+            <div class="rel-time" data-ts="{{ run.started_at }}"></div>
+          </td>
+          <td style="font-size:.8rem;color:var(--text-secondary)">
+            {{ run.duration or '—' }}
+          </td>
+          <td style="max-width:200px">
+            {% for f in run.files %}
+              <div class="truncate" title="{{ f }}" style="font-size:.75rem;color:var(--text-secondary)">
+                <i class="bi bi-file-earmark" style="font-size:.7rem"></i> {{ f }}
+              </div>
+            {% else %}
+              <span style="color:var(--text-muted)">—</span>
+            {% endfor %}
+          </td>
+          <td>
+            {% if run.dry_run %}
+              <span class="badge-status badge-dryrun">
+                <i class="bi bi-eye"></i> Dry
+              </span>
+            {% else %}
+              <span style="font-size:.72rem;color:var(--text-muted)">Live</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:.35rem;justify-content:flex-end;flex-wrap:nowrap">
+              <a href="{{ url_for('view_run', run_id=run.run_id) }}"
+                 class="btn btn-xs btn-outline-secondary">
+                <i class="bi bi-eye"></i> View
+              </a>
+              {% if run.log_file %}
+              <a href="{{ url_for('download_log', filename=run.log_file | basename) }}"
+                 class="btn btn-xs btn-outline-secondary" title="Download log">
+                <i class="bi bi-download"></i>
+              </a>
+              {% endif %}
+              {% if run.error_file %}
+              <a href="{{ url_for('download_log', filename=run.error_file | basename) }}"
+                 class="btn btn-xs btn-outline-danger" title="Download errors CSV">
+                <i class="bi bi-exclamation-triangle"></i>
+              </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-rocket-takeoff empty-icon"></i>
+      <p class="empty-title">No migration runs yet</p>
+      <p class="empty-desc">Start a migration from the dashboard to see the history here.</p>
+      <a href="{{ url_for('dashboard') }}" class="btn-run" style="text-decoration:none">
+        <i class="bi bi-play-fill"></i> Start Migration
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTable() {
+  const q      = document.getElementById('searchInput').value.toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  const rows   = document.querySelectorAll('#historyTable tbody tr');
+  let visible  = 0;
+
+  rows.forEach(row => {
+    const matchSearch = !q ||
+      row.dataset.label.includes(q) ||
+      row.dataset.runid.includes(q);
+    const matchStatus = !status || row.dataset.status === status;
+    const show = matchSearch && matchStatus;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  const cnt = document.getElementById('rowCount');
+  cnt.textContent = visible + ' of ' + rows.length + ' runs';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  filterTable();
+  document.querySelectorAll('.rel-time[data-ts]').forEach(el => {
+    const d = Math.floor((Date.now() - new Date(el.dataset.ts)) / 1000);
+    if (d < 60)    el.textContent = 'just now';
+    else if (d < 3600) el.textContent = Math.floor(d/60) + 'm ago';
+    else if (d < 86400) el.textContent = Math.floor(d/3600) + 'h ago';
+    else el.textContent = Math.floor(d/86400) + 'd ago';
+  });
+});
+</script>
+{% endblock %}

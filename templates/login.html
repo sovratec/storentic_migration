@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign In — Storentic Migration</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+  <style>
+    /* Override body bg for login page */
+    body { background: transparent; }
+  </style>
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-card">
+
+    {# Logo #}
+    <div class="login-logo">SM</div>
+
+    <h1 class="login-title">Storentic Migration</h1>
+    <p class="login-sub">Data migration control panel · Internal use only</p>
+
+    {# Flash messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          {% set cls = category if category != 'message' else 'danger' %}
+          <div class="flash-item flash-{{ cls }}" style="margin-bottom:1rem" role="alert">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" autocomplete="off">
+
+      <div style="margin-bottom:1rem">
+        <label for="username" style="display:block;font-size:.8rem;font-weight:600;margin-bottom:.4rem;color:var(--text-primary)">
+          Username
+        </label>
+        <div style="position:relative">
+          <i class="bi bi-person" style="
+              position:absolute;left:.75rem;top:50%;transform:translateY(-50%);
+              color:var(--text-muted);font-size:.9rem;pointer-events:none"></i>
+          <input type="text" id="username" name="username" required autofocus
+                 class="form-control"
+                 style="padding-left:2.2rem;border:1.5px solid var(--border);
+                        border-radius:var(--radius-sm);font-size:.85rem;height:40px"
+                 placeholder="Enter username">
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.5rem">
+        <label for="password" style="display:block;font-size:.8rem;font-weight:600;margin-bottom:.4rem;color:var(--text-primary)">
+          Password
+        </label>
+        <div style="position:relative">
+          <i class="bi bi-lock" style="
+              position:absolute;left:.75rem;top:50%;transform:translateY(-50%);
+              color:var(--text-muted);font-size:.9rem;pointer-events:none"></i>
+          <input type="password" id="password" name="password" required
+                 class="form-control"
+                 style="padding-left:2.2rem;padding-right:2.5rem;border:1.5px solid var(--border);
+                        border-radius:var(--radius-sm);font-size:.85rem;height:40px"
+                 placeholder="Enter password">
+          <button type="button" id="togglePwd" title="Show / hide password" style="
+              position:absolute;right:.65rem;top:50%;transform:translateY(-50%);
+              background:none;border:none;cursor:pointer;color:var(--text-muted);
+              font-size:.9rem;padding:0;line-height:1">
+            <i class="bi bi-eye" id="togglePwdIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-run" style="width:100%;justify-content:center">
+        <i class="bi bi-box-arrow-in-right"></i>
+        Sign In
+      </button>
+
+    </form>
+
+    <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:1.5rem;margin-bottom:0">
+      Storentic &copy; {{ now.year }} — SiteLink ETL v2
+    </p>
+
+  </div>
+</div>
+
+<script>
+const toggleBtn  = document.getElementById('togglePwd');
+const pwdInput   = document.getElementById('password');
+const toggleIcon = document.getElementById('togglePwdIcon');
+
+toggleBtn.addEventListener('click', () => {
+  const show = pwdInput.type === 'password';
+  pwdInput.type = show ? 'text' : 'password';
+  toggleIcon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+});
+</script>
+</body>
+</html>

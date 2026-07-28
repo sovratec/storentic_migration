@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ filename }} — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <a href="{{ url_for('logs_list') }}" class="breadcrumb-item">Skipped &amp; Errors</a>
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active truncate" style="max-width:260px" title="{{ filename }}">{{ filename }}</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div style="min-width:0">
+    <h1 class="page-title font-mono" style="font-size:1rem;word-break:break-all">{{ filename }}</h1>
+    {% if content %}
+      <p class="page-subtitle">{{ content | length }} lines</p>
+    {% endif %}
+  </div>
+  <div style="display:flex;gap:.5rem;flex-shrink:0">
+    <button class="btn btn-sm btn-outline-secondary" onclick="copyAll()" id="copyAllBtn">
+      <i class="bi bi-clipboard me-1"></i>Copy All
+    </button>
+    <a href="{{ url_for('download_log', filename=filename) }}"
+       class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-download me-1"></i>Download
+    </a>
+  </div>
+</div>
+
+<div class="card" style="overflow:hidden">
+  <div class="terminal-header">
+    <div class="terminal-dots">
+      <span class="terminal-dot red"></span>
+      <span class="terminal-dot yellow"></span>
+      <span class="terminal-dot green"></span>
+    </div>
+    <span class="terminal-title truncate" style="max-width:400px" title="{{ filename }}">{{ filename }}</span>
+    {% if content %}
+      <span style="font-size:.68rem;color:#6B7280;flex-shrink:0">{{ content | length }} lines</span>
+    {% endif %}
+  </div>
+  <div class="log-viewer" id="logBox">
+    {% if content %}
+      {% for line in content %}
+        <div class="log-row
+          {%- if 'ERROR' in line or '❌' in line %} t-error
+          {%- elif 'WARNING' in line or 'SKIPPED' in line or '⚠' in line %} t-warning
+          {%- elif '✅' in line or 'Inserted' in line or 'Success' in line %} t-success
+          {%- elif 'DRY RUN' in line or 'dry run' in line %} t-info
+          {%- elif '====' in line or '----' in line %} t-muted
+          {%- else %} t-default
+          {%- endif %}">
+          <span class="log-num">{{ loop.index }}</span>
+          <span class="log-text">{{ line }}</span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="t-muted" style="font-style:italic">(empty file)</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyAll() {
+  const lines = [...document.querySelectorAll('.log-text')].map(el => el.textContent).join('\n');
+  navigator.clipboard.writeText(lines).then(() => {
+    const btn = document.getElementById('copyAllBtn');
+    btn.innerHTML = '<i class="bi bi-clipboard-check me-1"></i>Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy All'; }, 2000);
+  });
+}
+</script>
+{% endblock %}

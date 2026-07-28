@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}Configuration — Storentic{% endblock %}
+{% block breadcrumb %}
+  <span class="breadcrumb-sep"><i class="bi bi-chevron-right" style="font-size:.65rem"></i></span>
+  <span class="breadcrumb-item active">Configuration</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Configuration</h1>
+    <p class="page-subtitle">Manage environment variables — saved to <code>.env</code></p>
+  </div>
+  <button id="testDbBtn" type="button"
+          style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+                 padding:.4rem 1rem;font-size:.8rem;font-weight:600;cursor:pointer;
+                 color:var(--text-primary);display:flex;align-items:center;gap:.4rem;transition:background .15s"
+          onmouseover="this.style.background='var(--body-bg)'"
+          onmouseout="this.style.background='var(--surface)'"
+          onclick="testDb()">
+    <span class="db-dot" id="testDot"></span>
+    <span id="testDbLabel">Test DB Connection</span>
+  </button>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:1.25rem;align-items:start">
+
+  {# ── Main config form ──────────────────────────────────────────────────────── #}
+  <form method="post" action="{{ url_for('config') }}" id="configForm">
+
+    {# Database #}
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-database"></i> Database</h2>
+        <span style="font-size:.72rem;color:var(--text-muted)">PostgreSQL connection settings</span>
+      </div>
+      <div class="card-body">
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">DB_HOST</div>
+            <div class="config-field-desc">Database hostname or IP</div>
+          </div>
+          <div class="config-field-input">
+            <input type="text" name="DB_HOST" class="form-control form-control-sm"
+                   value="{{ env.DB_HOST }}" placeholder="e.g. dev4-charlie.sovratec.com">
+          </div>
+        </div>
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">DB_PORT</div>
+            <div class="config-field-desc">PostgreSQL port (default 5432)</div>
+          </div>
+          <div class="config-field-input">
+            <input type="number" name="DB_PORT" class="form-control form-control-sm"
+                   value="{{ env.DB_PORT }}" placeholder="5432" style="max-width:120px">
+          </div>
+        </div>
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">DB_NAME</div>
+            <div class="config-field-desc">Database name</div>
+          </div>
+          <div class="config-field-input">
+            <input type="text" name="DB_NAME" class="form-control form-control-sm"
+                   value="{{ env.DB_NAME }}" placeholder="e.g. storentic_db">
+          </div>
+        </div>
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">DB_USER</div>
+            <div class="config-field-desc">Database username</div>
+          </div>
+          <div class="config-field-input">
+            <input type="text" name="DB_USER" class="form-control form-control-sm"
+                   value="{{ env.DB_USER }}" placeholder="e.g. storentic_user" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="config-field" style="border-bottom:none">
+          <div>
+            <div class="config-field-label">DB_PASSWORD</div>
+            <div class="config-field-desc">Leave blank to keep current</div>
+          </div>
+          <div class="config-field-input" style="position:relative">
+            <input type="password" name="DB_PASSWORD" id="dbPassword"
+                   class="form-control form-control-sm"
+                   placeholder="Enter new password to change"
+                   autocomplete="current-password"
+                   style="padding-right:2.2rem">
+            <button type="button" onclick="togglePwd('dbPassword','dbPwdIcon')"
+                    style="position:absolute;right:.5rem;top:50%;transform:translateY(-50%);
+                           background:none;border:none;cursor:pointer;color:var(--text-muted);
+                           font-size:.85rem;padding:0;line-height:1">
+              <i class="bi bi-eye" id="dbPwdIcon"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    {# Application #}
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-gear"></i> Application</h2>
+        <span style="font-size:.72rem;color:var(--text-muted)">Migration context settings</span>
+      </div>
+      <div class="card-body">
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">ORGANIZATION_ID</div>
+            <div class="config-field-desc">Written to every migrated row</div>
+          </div>
+          <div class="config-field-input">
+            <input type="number" name="ORGANIZATION_ID" class="form-control form-control-sm"
+                   value="{{ env.ORGANIZATION_ID }}" placeholder="1" style="max-width:100px">
+          </div>
+        </div>
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">LOCATION_ID</div>
+            <div class="config-field-desc">Facility / location being migrated</div>
+          </div>
+          <div class="config-field-input">
+            <input type="number" name="LOCATION_ID" class="form-control form-control-sm"
+                   value="{{ env.LOCATION_ID }}" placeholder="4" style="max-width:100px">
+          </div>
+        </div>
+
+        <div class="config-field" style="border-bottom:none">
+          <div>
+            <div class="config-field-label">CREATED_BY</div>
+            <div class="config-field-desc">User ID for audit trail</div>
+          </div>
+          <div class="config-field-input">
+            <input type="number" name="CREATED_BY" class="form-control form-control-sm"
+                   value="{{ env.CREATED_BY }}" placeholder="9" style="max-width:100px">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    {# Auth #}
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-shield-lock"></i> Dashboard Auth</h2>
+        <span style="font-size:.72rem;color:var(--text-muted)">Login credentials for this UI</span>
+      </div>
+      <div class="card-body">
+
+        <div class="config-field">
+          <div>
+            <div class="config-field-label">ADMIN_USER</div>
+            <div class="config-field-desc">Dashboard login username</div>
+          </div>
+          <div class="config-field-input">
+            <input type="text" name="ADMIN_USER" class="form-control form-control-sm"
+                   value="{{ env.ADMIN_USER }}" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="config-field" style="border-bottom:none">
+          <div>
+            <div class="config-field-label">ADMIN_PASS</div>
+            <div class="config-field-desc">Leave blank to keep current</div>
+          </div>
+          <div class="config-field-input" style="position:relative">
+            <input type="password" name="ADMIN_PASS" id="adminPwd"
+                   class="form-control form-control-sm"
+                   placeholder="Enter new password to change"
+                   autocomplete="off" style="padding-right:2.2rem">
+            <button type="button" onclick="togglePwd('adminPwd','adminPwdIcon')"
+                    style="position:absolute;right:.5rem;top:50%;transform:translateY(-50%);
+                           background:none;border:none;cursor:pointer;color:var(--text-muted);
+                           font-size:.85rem;padding:0;line-height:1">
+              <i class="bi bi-eye" id="adminPwdIcon"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn-run">
+      <i class="bi bi-floppy"></i> Save Configuration
+    </button>
+
+  </form>
+
+  {# ── Right: info panel ─────────────────────────────────────────────────────── #}
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    {# DB connection status card #}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-activity"></i> Connection Status</h3>
+      </div>
+      <div class="card-body" id="dbStatusCard" style="padding:.875rem 1rem">
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.625rem">
+          <span class="db-dot" id="connDot"></span>
+          <span id="connStatus" style="font-size:.8rem;font-weight:600">Checking…</span>
+        </div>
+        <table class="meta-table" id="connDetails" style="display:none">
+          <tr><td>Host</td><td id="cd-host">—</td></tr>
+          <tr><td>Database</td><td id="cd-db">—</td></tr>
+          <tr><td>Server version</td><td id="cd-ver">—</td></tr>
+        </table>
+        <p id="connError" style="font-size:.75rem;color:var(--danger);margin:0;display:none"></p>
+      </div>
+    </div>
+
+    {# Tips card #}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-lightbulb"></i> Tips</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem">
+        <ul style="margin:0;padding-left:1.25rem;font-size:.77rem;color:var(--text-secondary);line-height:1.7">
+          <li>Settings are saved to the <code>.env</code> file in the project root.</li>
+          <li>Changes take effect <strong>immediately</strong> for the next migration run.</li>
+          <li>Password fields left blank retain their current values.</li>
+          <li>The DB ping test runs a lightweight <code>SELECT 1</code> query.</li>
+          <li>Restart the Flask server if <code>FLASK_SECRET</code> is changed.</li>
+        </ul>
+      </div>
+    </div>
+
+    {# Current env summary #}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:.8rem"><i class="bi bi-eye"></i> Current Values</h3>
+      </div>
+      <div class="card-body" style="padding:.875rem 1rem">
+        <table class="meta-table">
+          <tr><td>Host</td>       <td><code style="font-size:.72rem">{{ env.DB_HOST or '—' }}</code></td></tr>
+          <tr><td>Port</td>       <td><code style="font-size:.72rem">{{ env.DB_PORT }}</code></td></tr>
+          <tr><td>Database</td>   <td><code style="font-size:.72rem">{{ env.DB_NAME or '—' }}</code></td></tr>
+          <tr><td>User</td>       <td><code style="font-size:.72rem">{{ env.DB_USER or '—' }}</code></td></tr>
+          <tr><td>Org ID</td>     <td><code style="font-size:.72rem">{{ env.ORGANIZATION_ID }}</code></td></tr>
+          <tr><td>Location ID</td><td><code style="font-size:.72rem">{{ env.LOCATION_ID }}</code></td></tr>
+          <tr><td>Created By</td> <td><code style="font-size:.72rem">{{ env.CREATED_BY }}</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePwd(inputId, iconId) {
+  const inp  = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+}
+
+async function testDb() {
+  const btn   = document.getElementById('testDbBtn');
+  const lbl   = document.getElementById('testDbLabel');
+  const dot   = document.getElementById('testDot');
+  const cDot  = document.getElementById('connDot');
+  const cStat = document.getElementById('connStatus');
+  const cDets = document.getElementById('connDetails');
+  const cErr  = document.getElementById('connError');
+
+  lbl.textContent = 'Testing…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/db-ping', { credentials: 'same-origin' });
+    const d = await r.json();
+
+    if (d.ok) {
+      dot.classList.remove('offline');
+      cDot.classList.remove('offline');
+      lbl.textContent  = 'Connected ✓';
+      cStat.textContent = 'Connected';
+      cStat.style.color = 'var(--success)';
+      cDets.style.display = '';
+      document.getElementById('cd-host').textContent = d.host || '—';
+      document.getElementById('cd-db').textContent   = d.database || '—';
+      document.getElementById('cd-ver').textContent  = d.version || '—';
+      cErr.style.display = 'none';
+    } else {
+      dot.classList.add('offline');
+      cDot.classList.add('offline');
+      lbl.textContent   = 'Connection Failed';
+      cStat.textContent = 'Failed';
+      cStat.style.color = 'var(--danger)';
+      cDets.style.display = 'none';
+      cErr.textContent  = d.error || 'Unknown error';
+      cErr.style.display = '';
+    }
+  } catch (e) {
+    dot.classList.add('offline');
+    lbl.textContent = 'Error';
+  }
+
+  btn.disabled = false;
+  setTimeout(() => { lbl.textContent = 'Test DB Connection'; }, 4000);
+}
+
+// Auto-test on page load
+document.addEventListener('DOMContentLoaded', testDb);
+</script>
+{% endblock %}

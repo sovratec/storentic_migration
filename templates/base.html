@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Storentic Migration{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body>
+
+{% if session.logged_in %}
+<div class="app-wrapper">
+
+  {# ── Sidebar ──────────────────────────────────────────────────────────────── #}
+  <aside id="sidebar" class="sidebar">
+
+    <div class="sidebar-header">
+      <div class="sidebar-logo">SM</div>
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-name">Storentic</span>
+        <span class="sidebar-brand-sub">Migration Center</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+
+      <span class="nav-section">Migration</span>
+
+      <a href="{{ url_for('dashboard') }}"
+         class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-play-circle-fill"></i>
+        <span class="sidebar-link-text">Run Migration</span>
+      </a>
+
+      <a href="{{ url_for('history') }}"
+         class="sidebar-link {% if request.endpoint == 'history' %}active{% endif %}">
+        <i class="bi bi-clock-history"></i>
+        <span class="sidebar-link-text">History</span>
+        {% if run_count is defined and run_count %}
+          <span class="nav-badge">{{ run_count }}</span>
+        {% endif %}
+      </a>
+
+      <a href="{{ url_for('logs_list') }}"
+         class="sidebar-link {% if request.endpoint in ['logs_list', 'view_log'] %}active{% endif %}">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span class="sidebar-link-text">Skipped &amp; Errors</span>
+      </a>
+
+      <span class="nav-section">Tools</span>
+
+      <a href="{{ url_for('convert_xlsx') }}"
+         class="sidebar-link {% if request.endpoint == 'convert_xlsx' %}active{% endif %}">
+        <i class="bi bi-file-earmark-arrow-down"></i>
+        <span class="sidebar-link-text">XLSX → CSV</span>
+      </a>
+
+      <span class="nav-section">System</span>
+
+      <a href="{{ url_for('config') }}"
+         class="sidebar-link {% if request.endpoint == 'config' %}active{% endif %}">
+        <i class="bi bi-sliders"></i>
+        <span class="sidebar-link-text">Configuration</span>
+      </a>
+
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-row">
+        <span class="db-dot" id="dbDot"></span>
+        <span class="sidebar-footer-text" id="dbStatus">Checking DB…</span>
+      </div>
+      <div class="sidebar-footer-row">
+        <span class="sidebar-footer-meta">
+          Loc:&nbsp;<strong>{{ env_loc }}</strong>&ensp;·&ensp;Org:&nbsp;<strong>{{ env_org }}</strong>
+        </span>
+      </div>
+    </div>
+
+  </aside>
+
+  {# ── Mobile overlay ───────────────────────────────────────────────────────── #}
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+  {# ── Main wrapper ─────────────────────────────────────────────────────────── #}
+  <div class="main-wrapper">
+
+    {# ── Topbar ───────────────────────────────────────────────────────────────── #}
+    <header class="topbar">
+
+      <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <nav class="topbar-breadcrumb">
+        <span class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Home</a></span>
+        {% block breadcrumb %}{% endblock %}
+      </nav>
+
+      <div class="topbar-right">
+
+        {# Running indicator #}
+        {% if active_run_id %}
+        <a href="{{ url_for('view_run', run_id=active_run_id) }}" class="running-pill" id="runningPill">
+          <span class="spinner-border" role="status"></span>
+          Running…
+        </a>
+        {% endif %}
+
+        {# User menu #}
+        <div style="position:relative" id="userMenuWrap">
+          <button class="user-btn" id="userMenuBtn" type="button">
+            <span class="user-avatar">{{ session.username[0] }}</span>
+            <span>{{ session.username }}</span>
+            <i class="bi bi-chevron-down" style="font-size:.65rem;opacity:.6"></i>
+          </button>
+          <div id="userDropdown" style="
+              display:none; position:absolute; right:0; top:calc(100% + 6px);
+              background:var(--surface); border:1px solid var(--border);
+              border-radius:var(--radius); box-shadow:var(--shadow-md);
+              min-width:160px; z-index:999; overflow:hidden;">
+            <a href="{{ url_for('logout') }}" style="
+                display:flex; align-items:center; gap:.5rem;
+                padding:.6rem 1rem; font-size:.8rem; font-weight:500;
+                color:var(--danger); text-decoration:none;">
+              <i class="bi bi-box-arrow-right"></i> Sign out
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </header>
+
+    {# ── Page content ─────────────────────────────────────────────────────────── #}
+    <main class="page-content">
+
+      {# Flash messages #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-container">
+            {% for category, message in messages %}
+              {% set cls = category if category != 'message' else 'info' %}
+              <div class="flash-item flash-{{ cls }}" role="alert">
+                <i class="bi bi-{% if cls == 'success' %}check-circle-fill{% elif cls == 'danger' %}exclamation-circle-fill{% elif cls == 'warning' %}exclamation-triangle-fill{% else %}info-circle-fill{% endif %}"></i>
+                <span>{{ message }}</span>
+                <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+
+    </main>
+  </div>
+</div>
+
+{% endif %}
+
+<script>
+// ── Sidebar toggle ──────────────────────────────────────────────────────────
+const sidebar  = document.getElementById('sidebar');
+const overlay  = document.getElementById('sidebarOverlay');
+const toggleBtn = document.getElementById('sidebarToggle');
+
+const isMobile = () => window.innerWidth <= 768;
+
+function openSidebar() {
+  if (isMobile()) {
+    sidebar.classList.add('mobile-open');
+    overlay.classList.add('visible');
+  } else {
+    sidebar.classList.remove('collapsed');
+    localStorage.setItem('sidebarCollapsed', '0');
+  }
+}
+
+function closeSidebar() {
+  if (isMobile()) {
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('visible');
+  } else {
+    sidebar.classList.add('collapsed');
+    localStorage.setItem('sidebarCollapsed', '1');
+  }
+}
+
+if (toggleBtn) {
+  toggleBtn.addEventListener('click', () => {
+    if (isMobile()) {
+      sidebar.classList.contains('mobile-open') ? closeSidebar() : openSidebar();
+    } else {
+      sidebar.classList.contains('collapsed') ? openSidebar() : closeSidebar();
+    }
+  });
+}
+
+if (overlay) overlay.addEventListener('click', closeSidebar);
+
+// Restore sidebar state on desktop
+if (!isMobile() && localStorage.getItem('sidebarCollapsed') === '1') {
+  if (sidebar) sidebar.classList.add('collapsed');
+}
+
+// ── User dropdown ────────────────────────────────────────────────────────────
+const userBtn  = document.getElementById('userMenuBtn');
+const userDrop = document.getElementById('userDropdown');
+if (userBtn && userDrop) {
+  userBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    userDrop.style.display = userDrop.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', () => { userDrop.style.display = 'none'; });
+}
+
+// ── DB status check ──────────────────────────────────────────────────────────
+async function checkDbStatus() {
+  const dot  = document.getElementById('dbDot');
+  const txt  = document.getElementById('dbStatus');
+  if (!dot || !txt) return;
+  try {
+    const r = await fetch('/api/db-ping', { credentials: 'same-origin' });
+    const d = await r.json();
+    if (d.ok) {
+      dot.classList.remove('offline');
+      txt.textContent = 'DB Connected';
+    } else {
+      dot.classList.add('offline');
+      txt.textContent = 'DB Error';
+    }
+  } catch {
+    dot.classList.add('offline');
+    txt.textContent = 'DB Offline';
+  }
+}
+checkDbStatus();
+
+// ── Relative timestamps ───────────────────────────────────────────────────────
+function relTime(dateStr) {
+  const d = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (d < 60)    return 'just now';
+  if (d < 3600)  return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  return Math.floor(d / 86400) + 'd ago';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.rel-time[data-ts]').forEach(el => {
+    el.textContent = relTime(el.dataset.ts);
+  });
+});
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

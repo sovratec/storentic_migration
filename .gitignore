@@ -1,7 +1,6 @@
 # Folders to ignore
 logs/
 docs/
-templates/
 sql/
 
 # Python
