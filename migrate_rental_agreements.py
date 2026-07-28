@@ -265,7 +265,10 @@ def transform_row(
 # ── Existing pairs pre-load (replaces per-row rental_agreement_exists queries) ─
 
 def load_existing_pairs(engine) -> set[tuple]:
-    """Pre-load all (customer_id, unit_id) pairs already in rental_agreements."""
+    """Pre-load all (customer_id, unit_id) pairs already in rental_agreements.
+    Also tracks active unit_ids separately to avoid the unique constraint on
+    idx_unit_active_rental (unit_id WHERE status = 'ACTIVE').
+    """
     from sqlalchemy import text as sa_text
     with engine.connect() as conn:
         rows = conn.execute(sa_text(
@@ -274,6 +277,18 @@ def load_existing_pairs(engine) -> set[tuple]:
     pairs = {(r.customer_id, r.unit_id) for r in rows}
     logger.info(f"📋  existing_pairs loaded: {len(pairs)} entries")
     return pairs
+
+
+def load_active_unit_ids(engine) -> set[int]:
+    """Pre-load all unit_ids that already have an ACTIVE rental agreement."""
+    from sqlalchemy import text as sa_text
+    with engine.connect() as conn:
+        rows = conn.execute(sa_text(
+            "SELECT unit_id FROM storentic.rental_agreements WHERE status = 'ACTIVE'"
+        )).fetchall()
+    ids = {r.unit_id for r in rows}
+    logger.info(f"📋  active_unit_ids loaded: {len(ids)} entries")
+    return ids
 
 
 # ── SQL statements ─────────────────────────────────────────────────────────────
@@ -307,6 +322,7 @@ _INSERT_SQL = """
         updated_datetime,
         version
     ) VALUES %s
+    ON CONFLICT (unit_id) WHERE status = 'ACTIVE' DO NOTHING
 """
 
 _INSERT_COLS = [
@@ -432,7 +448,8 @@ def main(args=None):
     engine         = None
     customer_map   = {}
     unit_map       = {}
-    existing_pairs: set[tuple] = set()
+    existing_pairs:  set[tuple] = set()
+    active_unit_ids: set[int]   = set()
     batch_size     = int(os.getenv("BATCH_SIZE", 500))
 
     if output_mode == "db" and not dry_run:
@@ -443,7 +460,8 @@ def main(args=None):
             with engine.connect() as conn:
                 customer_map = load_customer_map(conn, loc_id)
                 unit_map     = load_unit_map(conn, loc_id)
-            existing_pairs = load_existing_pairs(engine)
+            existing_pairs   = load_existing_pairs(engine)
+            active_unit_ids  = load_active_unit_ids(engine)
         except ImportError:
             logger.error("❌  sqlalchemy / psycopg2 not installed. Run: pip install sqlalchemy psycopg2-binary")
             sys.exit(1)
@@ -480,7 +498,11 @@ def main(args=None):
             stats["inserted"] += 1
             continue
 
-        if pair in existing_pairs:
+        if unit_id in active_unit_ids:
+            log_skipped(stats["total"], unit_id, "unit_id",
+                        f"unit_id={unit_id} already has an ACTIVE rental agreement", unit_id)
+            stats["skipped"] += 1
+        elif pair in existing_pairs:
             if update_existing:
                 update_records.append(record)
             else:
@@ -488,6 +510,7 @@ def main(args=None):
         else:
             new_records.append(record)
             existing_pairs.add(pair)
+            active_unit_ids.add(unit_id)
 
     # ── Step 4a: Bulk INSERT new records ──────────────────────────────────────
     if new_records and output_mode == "db" and not dry_run:

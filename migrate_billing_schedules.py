@@ -54,6 +54,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text as sa_text
+from sqlalchemy.pool import NullPool
 
 sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
@@ -246,7 +247,7 @@ def run(args):
         f"postgresql+psycopg2://{quote_plus(os.getenv('DB_USER', ''))}:{quote_plus(os.getenv('DB_PASSWORD', ''))}"
         f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT','5432')}/{os.getenv('DB_NAME')}"
     )
-    engine = create_engine(db_url)
+    engine = create_engine(db_url, poolclass=NullPool)
 
     customer_map = load_customer_map(engine, org_id)
     unit_map     = load_unit_map(engine, loc_id)
@@ -258,9 +259,17 @@ def run(args):
 
     for _, row in tenants.iterrows():
         stats["total"] += 1
-        tenant_id = str(row.get("TENANTID", "") or "").strip()
+        tenant_raw = str(row.get("TENANTID", "") or "").strip()
+        try:
+            tenant_id = str(int(float(tenant_raw))) if tenant_raw not in ("", "nan", "none") else ""
+        except (ValueError, TypeError):
+            tenant_id = tenant_raw
         unit_name = str(row.get("SUNITNAME", "") or "").strip()
-        freq_id   = str(row.get("BILLINGFREQID", "") or "").strip()
+        freq_raw  = str(row.get("BILLINGFREQID", "") or "").strip()
+        try:
+            freq_id = str(int(float(freq_raw))) if freq_raw not in ("", "nan", "none") else ""
+        except (ValueError, TypeError):
+            freq_id = freq_raw
         lease_raw = row.get("DLEASE")
 
         # ── BillingFrequency ──────────────────────────────────────────────────

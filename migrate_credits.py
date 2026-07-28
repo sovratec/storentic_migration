@@ -324,7 +324,15 @@ def process_credits(
     # ── Step 1: Vectorized pre-filter ─────────────────────────────────────────
 
     # Build external_credit_id and dedup
-    df["ext_credit_id"] = df["CREDITID"].apply(lambda x: str(x).strip())
+    def _to_id_str(x):
+        s = str(x).strip()
+        if s.lower() in ("", "nan", "none"):
+            return ""
+        try:
+            return str(int(float(s)))
+        except (ValueError, TypeError):
+            return s
+    df["ext_credit_id"] = df["CREDITID"].apply(_to_id_str)
     dup_mask = df["ext_credit_id"].isin(existing_ids)
     stats["skipped_dup"] = int(dup_mask.sum())
     df = df[~dup_mask].copy()

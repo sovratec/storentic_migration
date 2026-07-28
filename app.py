@@ -380,6 +380,15 @@ MIGRATION_TYPES = {
         "files":       [],
         "no_output_arg": True,
     },
+    "update_created_by": {
+        "label":       "Update Created By",
+        "description": "Resolve employee IDs to user IDs across all tables",
+        "icon":        "bi-person-check",
+        "group":       "Utilities",
+        "script":      "update_created_by.py",
+        "files":       [],
+        "no_output_arg": True,
+    },
 }
 
 # Group order for the UI

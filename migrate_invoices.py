@@ -105,7 +105,7 @@ _INVOICE_TYPE_NAMES: dict[int, str] = {
 _INSERT_SQL = """
     INSERT INTO storentic.invoices (
         invoice_number, customer_id, location_id, organization_id,
-        invoice_type_id, invoice_type, status, issue_date, due_date,
+        invoice_type_id, status, issue_date, due_date,
         subtotal_in_cents, tax_in_cents, total_in_cents,
         amount_paid_in_cents, balance_in_cents,
         created_by, created_at, updated_at, version,
@@ -116,7 +116,7 @@ _INSERT_SQL = """
 
 _INSERT_COLS = [
     "invoice_number", "customer_id", "location_id", "organization_id",
-    "invoice_type_id", "invoice_type", "status", "issue_date", "due_date",
+    "invoice_type_id", "status", "issue_date", "due_date",
     "subtotal_in_cents", "tax_in_cents", "total_in_cents",
     "amount_paid_in_cents", "balance_in_cents",
     "created_by", "created_at", "updated_at", "version",
@@ -167,14 +167,14 @@ def load_charge_map(engine) -> dict[str, dict]:
             "FROM storentic.ledger_charges "
             "WHERE external_charge_id IS NOT NULL"
         )).fetchall()
-    mapping = {
-        row.external_charge_id: {
+    mapping = {}
+    for row in rows:
+        key = _clean_id(row.external_charge_id) or row.external_charge_id
+        mapping[key] = {
             "customer_id":     row.customer_id,
             "charge_type_id":  row.charge_type_id,
             "amount_in_cents": row.amount_in_cents,
         }
-        for row in rows
-    }
     logger.info(f"    Charges loaded: {len(mapping):,}")
     return mapping
 
@@ -365,7 +365,7 @@ def build_invoice_records(
     logger.info(f"    Building records for {grouped.ngroups:,} unique invoices ...")
 
     for invoice_id_raw, group in grouped:
-        invoice_id = str(invoice_id_raw).strip()
+        invoice_id = _clean_id(invoice_id_raw) or str(invoice_id_raw).strip()
 
         if invoice_id in existing_ids:
             continue
@@ -589,7 +589,6 @@ def link_payments_to_invoices(records: list[dict], engine, dry_run: bool) -> int
                 SET invoice_id = v.invoice_id
                 FROM (VALUES %s) AS v(invoice_id, external_payment_id)
                 WHERE p.external_payment_id = v.external_payment_id
-                  AND p.invoice_id IS NULL
                 """,
                 update_tuples,
                 page_size=1000,

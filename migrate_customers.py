@@ -102,10 +102,6 @@ def transform_row(row_idx: int, row: pd.Series, col: dict, org_id: int, loc_id: 
         log_skipped(row_idx + 2, "UNKNOWN", COL_TENANT_ID, "TenantId is blank — row rejected", None)
         return None
 
-    if not last_name:
-        log_skipped(row_idx + 2, "UNKNOWN", COL_LNAME, "sLname is blank — row rejected", None)
-        return None
-
     record = {
         "external_id":                  external_id,
         "external_source":              external_source,

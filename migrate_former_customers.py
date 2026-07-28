@@ -170,11 +170,23 @@ def load_and_prepare(filepath: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 def _extract_tenant_id(row: pd.Series) -> str | None:
     """
     Case-insensitive lookup for the TenantId column.
-    Returns the stripped string value, or None if the column is absent or blank.
+    Returns the value as a clean integer string (e.g. "779153"), or None if
+    the column is absent or blank.  Pandas reads mixed-null integer columns as
+    float64, so 779153 arrives as 779153.0 — we convert via int(float()) to
+    strip the decimal before stringifying.
     """
     for col in row.index:
         if col.strip().lower() == "tenantid":
-            return T.clean_str(row[col]) or None
+            val = row[col]
+            if val is None:
+                return None
+            s = str(val).strip()
+            if s.lower() in ("", "nan", "none", "nat"):
+                return None
+            try:
+                return str(int(float(s)))
+            except (ValueError, TypeError):
+                return s or None
     return None
 
 
@@ -271,11 +283,6 @@ def process(
             record = transform_row(pd.Series(row._asdict()), org_id, loc_id, created_by, external_source)
         except Exception as exc:
             log_error(row_idx + 2, getattr(row, "LASTNAME", ""), "TRANSFORM", str(exc), None)
-            stats["errors"] += 1
-            continue
-
-        if not record.get("last_name"):
-            log_skipped(row_idx + 2, "UNKNOWN", "LASTNAME", "last_name is blank — skipped", None)
             stats["errors"] += 1
             continue
 
