@@ -355,6 +355,22 @@ MIGRATION_TYPES = {
             },
         ],
     },
+    "credit_cards": {
+        "label":       "Credit Cards",
+        "description": "Customer payment profiles from credit card export",
+        "icon":        "bi-credit-card-2-front",
+        "group":       "Financials",
+        "script":      "migrate_credit_cards.py",
+        "files": [
+            {
+                "key":    "file_credit_cards",
+                "label":  "Credit Cards Excel",
+                "accept": ".xlsx",
+                "arg":    "--input",
+                "hint":   "CreditCards.xlsx from SiteLink",
+            },
+        ],
+    },
     "gate_access_logs": {
         "label":       "Gate Access Logs",
         "description": "Entry / exit access events",
@@ -486,6 +502,8 @@ def _run_migration_thread(run_id: str, cmd: list, run_record: dict):
     q = _run_queues[run_id]
 
     try:
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -495,7 +513,7 @@ def _run_migration_thread(run_id: str, cmd: list, run_record: dict):
             errors='replace',
             bufsize=1,
             cwd=BASE_DIR,
-            env=os.environ.copy(),
+            env=env,
         )
         for line in iter(proc.stdout.readline, ""):
             if line.strip():
@@ -750,6 +768,15 @@ def stream(run_id):
 @login_required
 def history():
     return render_template("history.html", runs=load_runs())
+
+
+@app.route("/history/clear", methods=["POST"])
+@login_required
+def clear_history():
+    with open(RUNS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"runs": []}, f)
+    flash("Run history cleared.", "success")
+    return redirect(url_for("history"))
 
 
 # =============================================================================

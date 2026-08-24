@@ -54,8 +54,8 @@ SET
         WHEN COALESCE(pt.total_paid, 0) >= i.total_in_cents
              AND i.total_in_cents > 0             THEN 'PAID'
         WHEN COALESCE(pt.total_paid, 0) > 0       THEN 'PARTIAL_PAID'
-        WHEN i.due_date > CURRENT_DATE            THEN 'OVERDUE'
-        ELSE                                           'UNPAID'
+        WHEN i.due_date > CURRENT_DATE            THEN 'UNPAID'
+        ELSE                                           'OVERDUE'
     END,
     amount_paid_in_cents = COALESCE(pt.total_paid, 0),
     balance_in_cents     = GREATEST(i.total_in_cents - COALESCE(pt.total_paid, 0), 0),
