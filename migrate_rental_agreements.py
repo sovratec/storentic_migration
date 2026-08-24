@@ -265,14 +265,15 @@ def transform_row(
 # ── Existing pairs pre-load (replaces per-row rental_agreement_exists queries) ─
 
 def load_existing_pairs(engine) -> set[tuple]:
-    """Pre-load all (customer_id, unit_id) pairs already in rental_agreements.
-    Also tracks active unit_ids separately to avoid the unique constraint on
-    idx_unit_active_rental (unit_id WHERE status = 'ACTIVE').
+    """Pre-load (customer_id, unit_id) pairs that already have an ACTIVE rental agreement.
+    Only ACTIVE records are checked — terminated records for the same pair
+    should not block a new active rental being inserted.
     """
     from sqlalchemy import text as sa_text
     with engine.connect() as conn:
         rows = conn.execute(sa_text(
-            "SELECT customer_id, unit_id FROM storentic.rental_agreements"
+            "SELECT customer_id, unit_id FROM storentic.rental_agreements "
+            "WHERE status = 'ACTIVE'"
         )).fetchall()
     pairs = {(r.customer_id, r.unit_id) for r in rows}
     logger.info(f"📋  existing_pairs loaded: {len(pairs)} entries")

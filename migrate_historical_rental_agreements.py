@@ -108,17 +108,29 @@ def load_unit_map(conn, location_id: int) -> dict:
     return result
 
 
-def load_existing_triples(engine) -> set[tuple]:
-    """Load all (customer_id, unit_id, move_in_date) triples for historical rows."""
+def load_existing_triples(engine) -> tuple[set, set]:
+    """
+    Returns:
+      existing_quads  — set of (customer_id, unit_id, move_in_date, move_out_date)
+                        for all TERMINATED rows (dedup key)
+      active_triples  — set of (customer_id, unit_id, move_in_date)
+                        for all ACTIVE rows (used to skip conflicting historical inserts)
+    """
     from sqlalchemy import text as sa_text
     with engine.connect() as conn:
-        rows = conn.execute(sa_text(
-            "SELECT customer_id, unit_id, move_in_date FROM storentic.rental_agreements "
-            "WHERE move_out_date IS NOT NULL"
+        hist_rows = conn.execute(sa_text(
+            "SELECT customer_id, unit_id, move_in_date, move_out_date "
+            "FROM storentic.rental_agreements WHERE move_out_date IS NOT NULL"
         )).fetchall()
-    triples = {(r.customer_id, r.unit_id, r.move_in_date) for r in rows}
-    logger.info(f"📋  existing historical rental_agreement triples: {len(triples):,}")
-    return triples
+        active_rows = conn.execute(sa_text(
+            "SELECT customer_id, unit_id, move_in_date "
+            "FROM storentic.rental_agreements WHERE move_out_date IS NULL"
+        )).fetchall()
+    existing_quads  = {(r.customer_id, r.unit_id, r.move_in_date, r.move_out_date) for r in hist_rows}
+    active_triples  = {(r.customer_id, r.unit_id, r.move_in_date) for r in active_rows}
+    logger.info(f"📋  existing historical records : {len(existing_quads):,}")
+    logger.info(f"📋  existing active records     : {len(active_triples):,}")
+    return existing_quads, active_triples
 
 
 # ── SQL ────────────────────────────────────────────────────────────────────────
@@ -415,10 +427,11 @@ def main(args=None):
     else:
         logger.info("ℹ️   Dry-run / Excel mode: skipping DB connection.")
 
-    # Pre-load existing triples for O(1) dedup
-    existing_triples: set[tuple] = set()
+    # Pre-load existing records for O(1) dedup
+    existing_quads: set[tuple] = set()
+    active_triples: set[tuple] = set()
     if output_mode == "db" and not dry_run:
-        existing_triples = load_existing_triples(engine)
+        existing_quads, active_triples = load_existing_triples(engine)
 
     batch_size = int(os.getenv("BATCH_SIZE", 500))
 
@@ -442,10 +455,12 @@ def main(args=None):
             stats["errors"] += 1
             continue
 
-        customer_id  = record["customer_id"]
-        unit_id      = record["unit_id"]
-        move_in_date = record["move_in_date"]
-        triple       = (customer_id, unit_id, move_in_date)
+        customer_id   = record["customer_id"]
+        unit_id       = record["unit_id"]
+        move_in_date  = record["move_in_date"]
+        move_out_date = record["move_out_date"]
+        quad          = (customer_id, unit_id, move_in_date, move_out_date)
+        active_triple = (customer_id, unit_id, move_in_date)
 
         if output_mode == "excel":
             excel_records.append(record)
@@ -457,14 +472,22 @@ def main(args=None):
             stats["inserted"] += 1
             continue
 
-        if triple in existing_triples:
+        # Skip if an ACTIVE record exists for same customer+unit+move_in_date
+        if active_triple in active_triples:
+            log_skipped(0, customer_id, "move_in_date",
+                        f"Active rental exists for customer_id={customer_id}, unit_id={unit_id}, "
+                        f"move_in_date={move_in_date} — historical insert skipped", None)
+            stats["skipped"] += 1
+            continue
+
+        if quad in existing_quads:
             if update_existing:
                 update_records.append(record)
             else:
                 stats["skipped"] += 1
         else:
             new_records.append(record)
-            existing_triples.add(triple)
+            existing_quads.add(quad)
 
     # ── Bulk INSERT new records ───────────────────────────────────────────────
     if new_records and not dry_run and output_mode == "db":
